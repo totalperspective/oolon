@@ -10,6 +10,8 @@
 >
 > "Oh, that was easy," says Man, and for an encore goes on to prove that black is white and gets himself killed on the next zebra crossing.
 
+Well, That About Wraps It Up For God - Oolon Colluphid [Hitchikers Guide to the Galaxy - Douglas Adams]
+
 ## Usage
 
 FIXME
