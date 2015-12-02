@@ -34,6 +34,7 @@
 
 (facts "About generating queries"
        (query) => nil
+
        (query [:link {:src 1}])
        =>
        '[[?link :link/src 1]]
@@ -51,6 +52,7 @@
          [?link :link/dst ?via]
          [?path :path/src ?via]
          [?path :path/dst ?dst]]
+
        (query [:link {:src :?src :dst :?via :cost :?c1}]
               [:path {:src :?via :dst :?dst :cost :?c2}]
               '[(+ ?c1 ?c2) ?cost])
@@ -61,4 +63,20 @@
          [?path :path/src ?via]
          [?path :path/dst ?dst]
          [?path :path/cost ?c2]
-         [(+ ?c1 ?c2) ?cost]])
+         [(+ ?c1 ?c2) ?cost]]
+
+       (query [:link {:src :?src :dst :?via :cost :?c1}]
+              [:path {:src :?via :dst :?dst :cost :?c2}]
+              '[(+ ?c1 ?c2) ?cost]
+              '(not
+                [:link {:src :?dst}]))
+       =>
+       '[[?link :link/src ?src]
+         [?link :link/dst ?via]
+         [?link :link/cost ?c1]
+         [?path :path/src ?via]
+         [?path :path/dst ?dst]
+         [?path :path/cost ?c2]
+         [(+ ?c1 ?c2) ?cost]
+         (not
+          [?link :link/src ?dst])])

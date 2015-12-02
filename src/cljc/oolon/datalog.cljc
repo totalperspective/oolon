@@ -26,11 +26,15 @@
                    datom)))
              attrs)))))
 
-(defn query [& rels]
-  (when (seq rels)
+(defn query* [rels]
+  (when (sequential? rels)
     (->> rels
          (mapcat (fn [rel]
-                   (if (keyword? (first rel))
-                     (apply rel->eavt rel)
-                     [rel])))
+                   (cond
+                     (list? rel) [(apply list (query* rel))]
+                     (and (sequential? rel) (keyword? (first rel))) (apply rel->eavt rel)
+                     :else [rel])))
          (into []))))
+
+(defn query [& rels]
+  (query* rels))
