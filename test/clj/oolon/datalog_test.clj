@@ -19,25 +19,6 @@
         :_    '_
         :?s   '?s))
 
-(defn rel->eavt
-  ([rel attrs]
-   (rel->eavt rel attrs nil))
-  ([rel attrs tx]
-   (let [[rel-name rel-id] (clojure.string/split (name rel) #"#")
-         eid (symbol (str "?" rel-name rel-id))
-         tx (val->sym tx)]
-     (when-not (empty? attrs)
-       (mapv (fn [[k v]]
-               (let [attr (val->sym k)
-                     attr (if (keyword? attr)
-                            (keyword rel-name (name attr))
-                            attr)
-                     datom [eid attr (val->sym v)]]
-                 (if tx
-                   (conj datom tx)
-                   datom)))
-             attrs)))))
-
 (facts "About rel->eavt"
        (rel->eavt :link nil) => nil
        (rel->eavt :link {}) => nil
@@ -50,15 +31,6 @@
                                                          [?link :link/dst ?dst 1]]
        (rel->eavt :link {:src :?src :dst :dst} :?tx) =>  '[[?link :link/src ?src ?tx]
                                                            [?link :link/dst :dst ?tx]])
-
-(defn query [& rels]
-  (when (seq rels)
-    (->> rels
-         (mapcat (fn [rel]
-                   (if (keyword? (first rel))
-                     (apply rel->eavt rel)
-                     [rel])))
-         (into []))))
 
 (facts "About generating queries"
        (query) => nil
