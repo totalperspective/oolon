@@ -80,3 +80,36 @@
          [(+ ?c1 ?c2) ?cost]
          (not
           [?link :link/src ?dst])])
+
+(facts "About vars"
+       (lvars '[[?link :link/src 1]])
+       =>
+       '#{?link}
+
+       (lvars '[[?link :link/src ?src]
+                [?link :link/dst ?via]
+                [?link :link/cost ?c1]
+                [?path :path/src ?via]
+                [?path :path/dst ?dst]
+                [?path :path/cost ?c2]
+                [(+ ?c1 ?c2) ?cost]
+                (not
+                 [?link :link/src ?dst])])
+       =>
+       '#{?link ?src ?c1 ?path ?via ?c2 ?cost ?dst})
+
+(facts "About safety"
+       (tabular
+        (fact "every variable that appears in the head of a clause also
+appears in a nonarithmetic positive (i.e. not negated) literal in the
+body of the clause"
+              (safe? ?head ?body) => ?safe)
+        ?head         ?body          ?safe
+        '[?a]         '[?a]          true
+        '[]           '[?a]          true
+        '[?a]         '[]            false
+        '[]           '[[?a]]        true
+        '[[?a]]       '[]            false
+        '{:a ?a}      '[[?a] [?b]]   true
+        '{:a ?c}      '[[?a] [?b]]   false
+        '{?b {:b ?a}} '[[?a] [?b]]   true))

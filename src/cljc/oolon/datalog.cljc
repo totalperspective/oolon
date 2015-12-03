@@ -1,4 +1,5 @@
-(ns oolon.datalog)
+(ns oolon.datalog
+  (:require [clojure.core.match :refer [match]]))
 
 (defn val->sym [val]
   (cond
@@ -38,3 +39,43 @@
 
 (defn query [& rels]
   (query* rels))
+
+(defn lvar? [x]
+  (and (symbol? x)
+       (= \? (first (name x)))))
+
+(defn flatten-all [form]
+  (->> form
+       (clojure.walk/prewalk #(if (coll? %)
+                                (seq %)
+                                %))
+       flatten))
+
+(defn lvars [form]
+  (->> form
+       flatten-all
+       (filter lvar?)
+       (into #{})))
+
+(defn bind [smap form]
+  (clojure.walk/prewalk-replace smap form))
+
+(defn negation? [term]
+  (match [term]
+         [(['not & r] :seq)] true
+         [(['not-join & r] :seq)] true
+         :else false))
+
+(defn positive [form]
+  (remove negation? form))
+
+(defn negative [form]
+  (filter negation? form))
+
+(defn safe? [lhs rhs]
+  (let [lhs-lvars (lvars lhs)
+        pos-lvars (-> rhs positive lvars)
+        neg-lvars (-> rhs negative lvars)
+        lhs-diff (clojure.set/difference lhs-lvars pos-lvars)
+        neg-diff (clojure.set/difference neg-lvars pos-lvars)]
+    (every? empty? [lhs-diff neg-diff])))
