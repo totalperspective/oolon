@@ -3,6 +3,13 @@
   :url "http://example.com/FIXME"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
-  :dependencies [[org.clojure/clojure "1.6.0"]
-                 [com.datomic/datomic-free "0.9.5130"]
-                 [datomic-schema "1.2.2"]])
+  :test-paths ["test/clj"]
+  :source-paths ["src/clj" "src/cljc"]
+  :dependencies [[org.clojure/core.match "0.3.0-alpha4"]]
+  :profiles {:dev {:dependencies [[org.clojure/clojure "1.7.0"]
+                                  [com.datomic/datomic-free "0.9.5327" :exclusions [joda-time]]
+                                  [midje "1.7.0" :eclusions [org.clojure/clojure]]]
+                   :plugins [[lein-cljsbuild "1.0.5"]
+                             [lein-npm "0.6.1"]
+                             [lein-midje "3.1.3"]
+                             [lein-ancient "0.5.5"]]}})
