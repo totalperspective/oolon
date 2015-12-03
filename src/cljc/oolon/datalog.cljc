@@ -87,7 +87,7 @@
            (map (fn [[k v]]
                   (if (keyword? k)
                     (let [k (keyword (name rel-name) (name k))]
-                      [k (val->sym v)])
+                      [k (rel->map v)])
                     [(val->sym k) (val->sym v)])))
            (into {})))
     (clojure.walk/prewalk val->sym rel)))
