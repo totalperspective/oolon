@@ -2,8 +2,6 @@
   (:require [oolon.table :refer :all]
             [midje.sweet :refer :all]))
 
-(unfinished table scratch)
-
 (facts "About defineing tables"
        (table :link
               {:src :keyword :dst :keyword}
@@ -34,3 +32,17 @@
               {:src :keyword :dst :keyword}
               {:cost :long}
               :scratch))
+
+(facts "About records"
+       (let [link (table :link
+                         {:src :keyword :dst :keyword}
+                         {:cost :long})
+             row {:src :foo :dst :bar :cost 1}
+             key {:src :foo :dst :bar}
+             id (hash key)]
+         (record link row)
+         =>
+         {:link/$id id
+          :link/src :foo
+          :link/dst :bar
+          :link/cost 1}))
