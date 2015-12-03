@@ -79,3 +79,28 @@
         lhs-diff (clojure.set/difference lhs-lvars pos-lvars)
         neg-diff (clojure.set/difference neg-lvars pos-lvars)]
     (every? empty? [lhs-diff neg-diff])))
+
+(defn rel->map [rel]
+  (if (sequential? rel)
+    (let [[rel-name attrs] rel]
+      (->> attrs
+           (map (fn [[k v]]
+                  (if (keyword? k)
+                    (let [k (keyword (name rel-name) (name k))]
+                      [k (val->sym v)])
+                    [(val->sym k) (val->sym v)])))
+           (into {})))
+    (clojure.walk/prewalk val->sym rel)))
+
+(def default-rule {})
+
+(defn rule [head body]
+  (let [head (rel->map head)
+        body (query* body)
+        safe? (safe? head body)
+        neg? (not (empty? (negative body)))]
+    (-> default-rule
+        (assoc :head head)
+        (assoc :body body)
+        (assoc :safe? safe?)
+        (assoc :neg? neg?))))

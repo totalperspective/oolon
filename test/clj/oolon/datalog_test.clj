@@ -112,4 +112,12 @@ body of the clause"
         '[[?a]]       '[]            false
         '{:a ?a}      '[[?a] [?b]]   true
         '{:a ?c}      '[[?a] [?b]]   false
-        '{?b {:b ?a}} '[[?a] [?b]]   true))
+        '{?b {:b ?a}} '[[?a] [?b]]   true)
+       (tabular
+        (fact "requires that every variable appearing in a negative
+literal in the body of a clause also appears in some positive literal in
+the body of the clause"
+              (safe? [] ?body) => ?safe)
+        ?body                 ?safe
+        '[(not [?q])]         false
+        '[[?q] (not [?q])]    true))
