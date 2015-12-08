@@ -8,7 +8,8 @@
   (-tempid [conn part] [conn part n] "Generate a tempid in the specified
 partition. Within the scope of a single transaction, tempids map
 consistently to permanent ids. Values of n from -1 to -1000000,
-inclusive, are reserved for user-created tempids."))
+inclusive, are reserved for user-created tempids.")
+  (-add-attributes [conn tx-data]))
 
 (defprotocol HasDb
   (-db [conn] "Retrieves a value of the database for reading."))
@@ -52,6 +53,8 @@ the :tempids member returned through transact or with"))
 (def transact (conn-fn -transact))
 
 (def tempid (conn-fn -tempid))
+
+(def add-attributes (conn-fn -add-attributes))
 
 ;; ## HasDb
 (def db (has-db-fn -db))

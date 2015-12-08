@@ -5,6 +5,16 @@
 
 (def schema {:aka {:db/cardinality :db.cardinality/many}})
 
+(facts "About datascript schemas"
+       (let [tx [{:db/id :db/current-tx
+                  :db/ident :aka
+                  :db/cardinality :db.cardinality/many
+                  :db.install/_attribute :db.part/db}]]
+         (fact "We can convert a datascript schema to a datomic one"
+               (map->schema schema) => tx)
+         (fact "We can convert a datomic schema to a datascript one"
+               (schema->map tx) => schema)))
+
 (facts "About datascript"
        (let [conn (create-conn schema)
              tx-data [{:db/id (db/tempid conn :db.part/user)
