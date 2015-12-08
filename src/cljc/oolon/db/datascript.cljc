@@ -50,7 +50,8 @@
     (d/tempid part n))
   (-add-attributes [this tx-data]
     (let [tx-data (map (fn [attr]
-                         (assoc attr :db.install/_attribute [:db/ident :db.part/db]))
+                         (let [part (:db.install/_attribute attr)]
+                           (assoc attr :db.install/_attribute [:db/ident part])))
                        tx-data)
           db (:db-after (d/with (d/db conn) tx-data))
           attrs (->> db
