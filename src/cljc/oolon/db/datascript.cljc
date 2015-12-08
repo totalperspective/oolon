@@ -38,21 +38,35 @@
   (-db [this]
     this))
 
+(defn refs->ident [conn tx]
+  (let [schema (ddb/-schema @conn)]
+    (if (map? tx)
+      (->> tx
+           (map (fn [[a v]]
+                  (let [ref (if (ddb/reverse-ref? a)
+                              (ddb/reverse-ref a)
+                              a)
+                        type (get-in schema [ref :db/valueType])]
+                    (if (and (keyword? v) (= :db.type/ref type))
+                      [a [:db/ident v]]
+                      [a v]))))
+           (into {}))
+      tx)))
+
 (defrecord Conn [conn]
   db/Conn
   (-conn [_]
     conn)
   (-transact [_ tx-data]
-    (d/transact conn tx-data))
+    (->> tx-data
+         (map (partial refs->ident conn))
+         (d/transact conn)))
   (-tempid [_ part]
     (d/tempid part))
   (-tempid [_ part n]
     (d/tempid part n))
   (-add-attributes [this tx-data]
-    (let [tx-data (map (fn [attr]
-                         (let [part (:db.install/_attribute attr)]
-                           (assoc attr :db.install/_attribute [:db/ident part])))
-                       tx-data)
+    (let [tx-data (map (partial refs->ident conn) tx-data)
           db (:db-after (d/with (d/db conn) tx-data))
           attrs (->> db
                      (d/q '[:find (pull ?e [*])
