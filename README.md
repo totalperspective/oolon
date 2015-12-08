@@ -1,4 +1,5 @@
 # oolon
+[![Circle CI](https://circleci.com/gh/totalperspective/oolon.svg?style=svg&circle-token=5ba6245724fbcea9de4c13b7d58e035215929964)](https://circleci.com/gh/totalperspective/oolon)
 
 > Now, it is such a bizarrely improbable coincidence that anything so mind-bogglingly useful could have evolved purely by chance that some have chosen to see it as the final proof of the NON-existence of God. The argument goes something like this:
 >
