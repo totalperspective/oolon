@@ -11,9 +11,11 @@
          (fact "Given a table we get a datomic schema"
                s => (has every? (contains {:db/ident keyword?
                                            :db/valueType keyword?
-                                           :db/index true})))
+                                           :db/index true
+                                           :db.install/_attribute :db.part/db})))
          (fact "One of the attributes is the id"
                s => (contains {:db/ident :link/$id
                                :db/valueType :db.type/long
                                :db/index true
-                               :db/unique :db.unique/identity}))))
+                               :db/unique :db.unique/identity
+                               :db.install/_attribute :db.part/db}))))

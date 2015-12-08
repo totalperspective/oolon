@@ -31,9 +31,11 @@
      (mapv (fn [[k t]]
              {:db/ident (ident k)
               :db/valueType (type->valueType t)
-              :db/index true})
+              :db/index true
+              :db.install/_attribute :db.part/db})
            attrs)
      {:db/ident id-attr
       :db/valueType :db.type/long
       :db/index true
-      :db/unique :db.unique/identity})))
+      :db/unique :db.unique/identity
+      :db.install/_attribute :db.part/db})))

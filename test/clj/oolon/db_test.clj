@@ -8,6 +8,7 @@
   (-transact [this arg1] :tx)
   (-tempid [this arg1] :tid1)
   (-tempid [this arg1 arg2] :tid2)
+  (-add-attributes [this arg1] :attribute)
   oolon.db/HasDb
   (-db [this] :db)
   oolon.db/Db
@@ -34,6 +35,7 @@
         transact       ac1   :tx
         tempid         ac1   :tid1
         tempid         ac2   :tid2
+        add-attributes ac1   :attribute
         db             ac0   :db
         query          ac1   :q
         q              ac2   :q
@@ -49,6 +51,8 @@
         transact       ac2
         tempid         ac0
         tempid         ac3
+        add-attributes ac0
+        add-attributes ac2
         db             ac1
         query          ac0
         query          ac2
