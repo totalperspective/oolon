@@ -60,11 +60,11 @@
                      (map first)
                      schema->map)
           {:keys [schema rschema]} (ddb/empty-db (merge init-schema attrs))]
-      (swap! conn (fn [conn]
-                    (-> conn
+      (swap! conn (fn [db]
+                    (-> db
                         (assoc :rschema rschema)
                         (assoc :schema schema))))
-      (d/transact conn tx-data)
+      (d/transact! conn tx-data)
       this))
   db/HasDb
   (-db [_]
