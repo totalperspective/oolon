@@ -7,6 +7,7 @@
   :source-paths ["src/clj" "src/cljc"]
   :dependencies [[org.clojure/core.match "0.3.0-alpha4"]]
   :profiles {:dev {:dependencies [[org.clojure/clojure "1.7.0"]
+                                  [datascript "0.13.3"]
                                   [com.datomic/datomic-free "0.9.5327" :exclusions [joda-time]]
                                   [midje "1.7.0" :eclusions [org.clojure/clojure]]]
                    :plugins [[lein-cljsbuild "1.0.5"]
