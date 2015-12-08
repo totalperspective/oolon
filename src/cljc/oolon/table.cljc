@@ -1,6 +1,8 @@
 (ns oolon.table)
 
 (defn table
+  ([name keys]
+   (table name keys {} :table))
   ([name keys vals]
    (table name keys vals :table))
   ([name keys vals type]
