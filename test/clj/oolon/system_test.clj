@@ -7,12 +7,18 @@
             [oolon.module :as m]
             [oolon.db.datascript :as ds]))
 
+(def sym-table
+  (t/table :sym {:name :keyword}))
+
+(def perm-table
+  (t/table :perm {:x :keyword :y :keyword}))
+
 (def module
   (m/module
    :permutations
    [:state
-    (t/table :sym {:name :keyword})
-    (t/table :perm {:x :keyword :y :keyword})
+    sym-table
+    perm-table
     :rules
     (d/rule [:perm {:x :?x :y :?y}]
             [[:sym {:name :?x}]
@@ -22,10 +28,14 @@
 (facts "About a new system"
        (let [conn (ds/create-conn {})
              sys (system :test conn [module])]
+         (fact "We can ennumerate all the tables"
+               (tables sys) => {:system system-table
+                                :sym sym-table
+                                :perm perm-table})
          (fact "The system is not started"
                (started? sys) => false)
          (fact "We cannot assert anything yet"
-               (assert! sys [:foo {:bar :baz}]) => nil)
+               (+fact sys [:foo {:bar :baz}]) => nil)
          (fact "We cannot run anything yet"
                (run! sys) => nil)
          (fact "We have no state"
@@ -42,3 +52,18 @@
                (state sys) => #{[:system {:name :test :timestep 1}]})
          (fact "Running the system is a noop"
                (run! sys) => sys)))
+
+(facts "About asserting a fact that triggers no rules"
+          (let [conn (ds/create-conn {})
+                sys  (-> :test
+                         (system conn [module])
+                         start!
+                         (+fact [:sym {:name :a}]))]
+            (fact "Before we run nothing has changed"
+                  (state sys) => #{[:system {:name :test :timestep 1}]})
+            (fact "Running the system moves to the next timestep and adds the fact"
+                  (state (run! sys)) => #{[:system {:name :test :timestep 2}]
+                                          [:sym {:name :a}]})
+            (fact "Running again does nothing"
+                  (state (run! sys)) => #{[:system {:name :test :timestep 2}]
+                                          [:sym {:name :a}]})))
