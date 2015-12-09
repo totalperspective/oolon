@@ -12,23 +12,26 @@
   ([rel attrs]
    (rel->eavt rel attrs nil))
   ([rel attrs tx]
-   (let [[rel-name rel-id] (clojure.string/split (name rel) #"#")
-         eid (symbol (str "?" rel-name rel-id))
-         tx (val->sym tx)]
-     (when-not (empty? attrs)
-       (conj (mapv (fn [[k v]]
-                     (let [attr (val->sym k)
-                           attr (if (keyword? attr)
-                                  (keyword rel-name (name attr))
-                                  attr)
-                           datom [eid attr (val->sym v)]]
-                       (if tx
-                         (conj datom tx)
-                         datom)))
-                   attrs)
-             (vector eid
-                     (keyword rel-name "$id")
-                     (symbol (str (name eid) "$id"))))))))
+   (when attrs
+     (let [[rel-name rel-id] (clojure.string/split (name rel) #"#")
+           eid (symbol (str "?" rel-name rel-id))
+           tx (val->sym tx)
+           id-attr (vector eid
+                           (keyword rel-name "$id")
+                           (symbol (str (name eid) "$id")))]
+       (if (empty? attrs)
+         [id-attr]
+         (conj (mapv (fn [[k v]]
+                       (let [attr (val->sym k)
+                             attr (if (keyword? attr)
+                                    (keyword rel-name (name attr))
+                                    attr)
+                             datom [eid attr (val->sym v)]]
+                         (if tx
+                           (conj datom tx)
+                           datom)))
+                     attrs)
+               id-attr))))))
 
 (defn query* [rels]
   (when (sequential? rels)
@@ -60,7 +63,7 @@
        (filter lvar?)
        (into #{})))
 
-(defn bind [smap form]
+(defn bind-form [form smap]
   (clojure.walk/prewalk-replace smap form))
 
 (defn negation? [term]
@@ -97,12 +100,13 @@
 
 (def default-rule {})
 
-(defn rule [head body]
-  (let [head (rel->map head)
+(defn rule [head-form body]
+  (let [head (rel->map head-form)
         body (query* body)
         safe? (safe? head body)
         neg? (not (empty? (negative body)))]
     (-> default-rule
+        (assoc :head-form head-form)
         (assoc :head head)
         (assoc :body body)
         (assoc :safe? safe?)

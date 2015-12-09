@@ -22,16 +22,23 @@
   (into {}
         (map (fn [sch]
                (let [ident (:db/ident sch)
-                     sch (dissoc sch :db/ident :db/id :db.install/_attribute)]
+                     sch (dissoc sch )
+                     sch (into {} (keep (fn [[k v]]
+                                          (cond
+                                            (#{:db/ident :db/id :db.install/_attribute} k) nil
+                                            (and (= k :db/valueType) (not= v :db.type/ref)) nil
+                                            :else [k v]))
+                                        sch))]
                  [ident sch]))
              tx)))
 
-(defrecord Db [db]
+(defrecord Db [db last-tx]
   db/Db
   (-query [_ {:keys [query args]}]
     (apply d/q query db args))
-  (-with [db tx-data]
-    (->Db (d/with db tx-data)))
+  (-with [_ tx-data]
+    (let [last-tx (d/with db tx-data)]
+      (->Db (:db-after last-tx) last-tx)))
   (-resolve-tempid [_ tempids tempid]
     (d/resolve-tempid db tempids tempid))
   db/HasDb
@@ -83,7 +90,7 @@
       this))
   db/HasDb
   (-db [_]
-    (->Db (d/db conn))))
+    (->Db (d/db conn) nil)))
 
 (defn create-conn [schema]
   (let [schema (map->schema schema)
