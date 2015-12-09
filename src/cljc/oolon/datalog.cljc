@@ -98,7 +98,7 @@
            (into {})))
     (clojure.walk/prewalk val->sym rel)))
 
-(def default-rule {})
+(def default-rule {:insert true})
 
 (defn rule [head-form body]
   (let [head (rel->map head-form)
@@ -111,3 +111,7 @@
         (assoc :body body)
         (assoc :safe? safe?)
         (assoc :neg? neg?))))
+
+(defn rule+ [head-form body]
+  (-> (rule head-form body)
+      (assoc :deferred true)))

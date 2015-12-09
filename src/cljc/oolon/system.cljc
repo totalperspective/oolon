@@ -86,26 +86,34 @@
 (defn run-rule [db tables rule]
   (let [{:keys [head-form head body]} rule
         table (get tables (first head-form))
+        defer (:deferred rule)
         lvars (into [] (d/lvars head))]
-    (->> {:find lvars :where body}
-         (db/q db)
-         (map (partial zipmap lvars))
-         (map (partial d/bind-form head))
-         (map (partial t/add-id table)))))
+    [defer (->> {:find lvars :where body}
+                (db/q db)
+                (map (partial zipmap lvars))
+                (map (partial d/bind-form head))
+                (map (partial t/add-id table)))]))
 
 (defn run-rules!
   ([db sys]
-   (run-rules! db sys #{} 999))
-  ([db sys tx-acc max]
+   (run-rules! db sys #{} #{} 999))
+  ([db sys tx-acc deferred max]
    (when (pos? max)
      (let [rules (rules sys)
-           tx-data (mapcat (partial run-rule db (tables sys)) rules)
+           txes (map (partial run-rule db (tables sys)) rules)
+           [tx-data defer] (reduce (fn [[now next] [defer? tx]]
+                                     (if defer?
+                                       [now (into next tx)]
+                                       [(into now tx) next]))
+                                   [[] []]
+                                   txes)
            tx-acc (into tx-acc tx-data)
+           deferred (into deferred defer)
            db (db/with db tx-data)
            tx-data (get-in db [:last-tx :tx-data])]
        (if (empty? tx-data)
-         tx-acc
-         (recur db sys tx-acc (dec max)))))))
+         [tx-acc deferred]
+         (recur db sys tx-acc deferred (dec max)))))))
 
 (defn clean-scratch! [sys]
   (let [{:keys [conn]} sys
@@ -132,6 +140,8 @@
               [[_ ts-attrs]] (table->facts sys system-table)
               timestep (:timestep ts-attrs)
               next-t (t/record system-table {:name name :timestep (inc timestep)})
-              tx (into [next-t] (run-rules! db sys))]
+              [tx-now tx-next] (run-rules! db sys)
+              tx (into [next-t] tx-now)
+              assertions (into [] tx-next)]
           @(db/transact conn tx)
-          sys)))))
+          (assoc-in sys [:facts :assertions] assertions))))))

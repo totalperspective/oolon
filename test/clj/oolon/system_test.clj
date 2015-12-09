@@ -16,6 +16,12 @@
 (def add-sym-table
   (t/scratch :add-sym {:name :keyword}))
 
+(def send-table
+  (t/scratch :send {:name :keyword}))
+
+(def recv-table
+  (t/table :recv {:name :keyword}))
+
 (def module
   (m/module
    :permutations
@@ -23,13 +29,17 @@
     sym-table
     perm-table
     add-sym-table
+    send-table
+    recv-table
     :rules
-    (d/rule [:sym {:name :?n}]
-            [[:add-sym {:name :?n}]])
     (d/rule [:perm {:x :?x :y :?y}]
             [[:sym#1 {:name :?x}]
              [:sym#2 {:name :?y}]
-             '[(!= ?x ?y)]])]))
+             '[(!= ?x ?y)]])
+    (d/rule [:sym {:name :?n}]
+            [[:add-sym {:name :?n}]])
+    (d/rule+ [:recv {:name :?n}]
+             [[:send {:name :?n}]])]))
 
 (facts "About a new system"
        (let [conn (ds/create-conn {})
@@ -38,7 +48,9 @@
                (tables sys) => {:system system-table
                                 :sym sym-table
                                 :perm perm-table
-                                :add-sym add-sym-table})
+                                :add-sym add-sym-table
+                                :send send-table
+                                :recv recv-table})
          (fact "The system is not started"
                (started? sys) => false)
          (fact "We cannot assert anything yet"
@@ -134,3 +146,38 @@
                   ?fact
                   [:system {:name :test :timestep 2}]
                   [:sym {:name :a}])))))
+
+(facts "About deferred inserts"
+       (let [conn (ds/create-conn {})
+             sys  (-> :test
+                      (system conn [module])
+                      start!
+                      (+fact [:send {:name :a}])
+                      run!)]
+         (fact "Running the system moves to the next timestep and adds the new fact"
+               (let [s (state sys)]
+                 (count s) => 2
+                 (tabular
+                  (fact "We have all the facts we expect"
+                        (s ?fact) => ?fact)
+                  ?fact
+                  [:system {:name :test :timestep 2}]
+                  [:send {:name :a}])))
+         (fact "Running the system again moves to the next timestep, removes the scratch and adds the deffered fact"
+               (let [s (state (run! sys))]
+                 (count s) => 2
+                 (tabular
+                  (fact "We have all the facts we expect"
+                        (s ?fact) => ?fact)
+                  ?fact
+                  [:system {:name :test :timestep 3}]
+                  [:recv {:name :a}])))
+         (fact "Running again does nothing"
+               (let [s (state (run! sys))]
+                 (count s) => 2
+                 (tabular
+                  (fact "We have all the facts we expect"
+                        (s ?fact) => ?fact)
+                  ?fact
+                  [:system {:name :test :timestep 3}]
+                  [:recv {:name :a}])))))
