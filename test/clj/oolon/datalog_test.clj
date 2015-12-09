@@ -22,36 +22,44 @@
 (facts "About rel->eavt"
        (rel->eavt :link nil) => nil
        (rel->eavt :link {}) => nil
-       (rel->eavt :link {:src 1}) => '[[?link :link/src 1]]
-       (rel->eavt :link#1 {:src 1}) => '[[?link1 :link/src 1]]
-       (rel->eavt :link {:src :?src}) => '[[?link :link/src ?src]]
+       (rel->eavt :link {:src 1}) => '[[?link :link/src 1] [?link :link/$id ?link$id]]
+       (rel->eavt :link#1 {:src 1}) => '[[?link1 :link/src 1] [?link1 :link/$id ?link1$id]]
+       (rel->eavt :link {:src :?src}) => '[[?link :link/src ?src] [?link :link/$id ?link$id]]
        (rel->eavt :link {:src :src :_ :dst}) => '[[?link :link/src :src]
-                                                  [?link _ :dst]]
+                                                  [?link _ :dst]
+                                                  [?link :link/$id ?link$id]]
        (rel->eavt :link {:src :?src :dst :?dst} 1) =>  '[[?link :link/src ?src 1]
-                                                         [?link :link/dst ?dst 1]]
+                                                         [?link :link/dst ?dst 1]
+                                                         [?link :link/$id ?link$id]]
        (rel->eavt :link {:src :?src :dst :dst} :?tx) =>  '[[?link :link/src ?src ?tx]
-                                                           [?link :link/dst :dst ?tx]])
+                                                           [?link :link/dst :dst ?tx]
+                                                           [?link :link/$id ?link$id]])
 
 (facts "About generating queries"
        (query) => nil
 
        (query [:link {:src 1}])
        =>
-       '[[?link :link/src 1]]
+       '[[?link :link/src 1]
+         [?link :link/$id ?link$id]]
 
        (query [:link#1 {:src 1}]
               [:link#2 {:src 2}])
        =>
        '[[?link1 :link/src 1]
-         [?link2 :link/src 2]]
+         [?link1 :link/$id ?link1$id]
+         [?link2 :link/src 2]
+         [?link2 :link/$id ?link2$id]]
 
        (query [:link {:src :?src :dst :?via}]
               [:path {:src :?via :dst :?dst}])
        =>
        '[[?link :link/src ?src]
          [?link :link/dst ?via]
+         [?link :link/$id ?link$id]
          [?path :path/src ?via]
-         [?path :path/dst ?dst]]
+         [?path :path/dst ?dst]
+         [?path :path/$id ?path$id]]
 
        (query [:link {:src :?src :dst :?via :cost :?c1}]
               [:path {:src :?via :dst :?dst :cost :?c2}]
@@ -60,9 +68,11 @@
        '[[?link :link/src ?src]
          [?link :link/dst ?via]
          [?link :link/cost ?c1]
+         [?link :link/$id ?link$id]
          [?path :path/src ?via]
          [?path :path/dst ?dst]
          [?path :path/cost ?c2]
+         [?path :path/$id ?path$id]
          [(+ ?c1 ?c2) ?cost]]
 
        (query [:link {:src :?src :dst :?via :cost :?c1}]
@@ -74,12 +84,15 @@
        '[[?link :link/src ?src]
          [?link :link/dst ?via]
          [?link :link/cost ?c1]
+         [?link :link/$id ?link$id]
          [?path :path/src ?via]
          [?path :path/dst ?dst]
          [?path :path/cost ?c2]
+         [?path :path/$id ?path$id]
          [(+ ?c1 ?c2) ?cost]
          (not
-          [?link :link/src ?dst])])
+          [?link :link/src ?dst]
+          [?link :link/$id ?link$id])])
 
 (facts "About vars"
        (lvars '[[?link :link/src 1]])
@@ -89,14 +102,17 @@
        (lvars '[[?link :link/src ?src]
                 [?link :link/dst ?via]
                 [?link :link/cost ?c1]
+                [?link :link/$id ?link$id]
                 [?path :path/src ?via]
                 [?path :path/dst ?dst]
                 [?path :path/cost ?c2]
+                [?path :path/$id ?path$id]
                 [(+ ?c1 ?c2) ?cost]
                 (not
-                 [?link :link/src ?dst])])
+                 [?link :link/src ?dst]
+                 [?link :link/$id ?link$id])])
        =>
-       '#{?link ?src ?c1 ?path ?via ?c2 ?cost ?dst})
+       '#{?link ?link$id ?src ?c1 ?path ?path$id ?via ?c2 ?cost ?dst})
 
 (facts "About safety"
        (tabular

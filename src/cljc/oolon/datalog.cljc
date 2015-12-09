@@ -16,16 +16,19 @@
          eid (symbol (str "?" rel-name rel-id))
          tx (val->sym tx)]
      (when-not (empty? attrs)
-       (mapv (fn [[k v]]
-               (let [attr (val->sym k)
-                     attr (if (keyword? attr)
-                            (keyword rel-name (name attr))
-                            attr)
-                     datom [eid attr (val->sym v)]]
-                 (if tx
-                   (conj datom tx)
-                   datom)))
-             attrs)))))
+       (conj (mapv (fn [[k v]]
+                     (let [attr (val->sym k)
+                           attr (if (keyword? attr)
+                                  (keyword rel-name (name attr))
+                                  attr)
+                           datom [eid attr (val->sym v)]]
+                       (if tx
+                         (conj datom tx)
+                         datom)))
+                   attrs)
+             (vector eid
+                     (keyword rel-name "$id")
+                     (symbol (str (name eid) "$id"))))))))
 
 (defn query* [rels]
   (when (sequential? rels)
