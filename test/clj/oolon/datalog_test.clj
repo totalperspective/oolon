@@ -21,7 +21,7 @@
 
 (facts "About rel->eavt"
        (rel->eavt :link nil) => nil
-       (rel->eavt :link {}) => nil
+       (rel->eavt :link {}) => '[[?link :link/$id ?link$id]]
        (rel->eavt :link {:src 1}) => '[[?link :link/src 1] [?link :link/$id ?link$id]]
        (rel->eavt :link#1 {:src 1}) => '[[?link1 :link/src 1] [?link1 :link/$id ?link1$id]]
        (rel->eavt :link {:src :?src}) => '[[?link :link/src ?src] [?link :link/$id ?link$id]]

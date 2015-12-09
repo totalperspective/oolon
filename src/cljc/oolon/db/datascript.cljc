@@ -22,7 +22,13 @@
   (into {}
         (map (fn [sch]
                (let [ident (:db/ident sch)
-                     sch (dissoc sch :db/ident :db/id :db.install/_attribute)]
+                     sch (dissoc sch )
+                     sch (into {} (keep (fn [[k v]]
+                                          (cond
+                                            (#{:db/ident :db/id :db.install/_attribute} k) nil
+                                            (and (= k :db/valueType) (not= v :db.type/ref)) nil
+                                            :else [k v]))
+                                        sch))]
                  [ident sch]))
              tx)))
 

@@ -40,9 +40,12 @@
              row {:src :foo :dst :bar :cost 1}
              key {:src :foo :dst :bar}
              id (hash key)]
-         (record link row)
-         =>
-         {:link/$id id
-          :link/src :foo
-          :link/dst :bar
-          :link/cost 1}))
+         (fact "We can generate a record from a row"
+               (record link row)
+               =>
+               {:link/$id id
+                :link/src :foo
+                :link/dst :bar
+                :link/cost 1})
+         (fact "We can an empty relation"
+               (rel link) => '[:link {:src ?src :dst ?dst :cost ?cost}])))
