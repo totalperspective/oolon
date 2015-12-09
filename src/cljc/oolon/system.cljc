@@ -48,13 +48,18 @@
       (db/transact conn [sys-ts])
       sys)))
 
+(defn fact->record [sys fact]
+  (let [tables (tables sys)
+        [name attrs] fact
+        table (get tables name)]
+    (when table
+      (t/record table attrs))))
+
 (defn +fact [sys fact]
   (when (started? sys)
-    (let [tables (tables sys)
-          [name attrs] fact
-          table (get tables name)]
-      (when table
-        (update-in sys [:facts :assertions] conj (t/record table attrs))))))
+    (let [rec (fact->record sys fact)]
+      (when rec
+        (update-in sys [:facts :assertions] conj rec)))))
 
 (defn table->facts [sys table]
   (let [{:keys [conn modules name]} sys
