@@ -107,8 +107,21 @@
          tx-acc
          (recur db sys tx-acc (dec max)))))))
 
+(defn clean-scratch! [sys]
+  (let [{:keys [conn]} sys
+        db (db/db conn)
+        tx (mapcat (fn [{:keys [name]}]
+                        (let [[[e a v]] (d/rel->eavt name {})]
+                          (map (fn [[e v]]
+                                 [:db/retract e a v])
+                               (db/q db {:find [e v]
+                                         :where [[e a v]]}))))
+                      (filter :scratch (vals (tables sys))))]
+    @(db/transact conn tx)))
+
 (defn run! [sys]
   (when (started? sys)
+    (clean-scratch! sys)
     (let [{:keys [facts name conn]} sys
           {:keys [assertions]} facts
           {:keys [tx-data]} @(db/transact conn assertions)

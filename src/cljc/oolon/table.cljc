@@ -1,18 +1,27 @@
 (ns oolon.table)
 
+(def opt? #{:scratch})
+
 (defn table
   ([name keys]
    (table name keys {} :table))
   ([name keys vals]
    (table name keys vals :table))
-  ([name keys vals type]
-   {:name name
-    :keys keys
-    :vals vals
-    :type type}))
+  ([name keys vals & opts]
+   (let [base (->> opts
+                   (filter opt?)
+                   (map (fn [o]
+                          [o true]))
+                   (into {}))]
+     (merge base {:name name
+                  :keys keys
+                  :vals vals}))))
 
-(defn scratch [name keys vals]
-  (table name keys vals :scratch))
+(defn scratch
+  ([name keys]
+   (scratch name keys {}))
+  ([name keys vals]
+   (table name keys vals :scratch)))
 
 (defn record [table row]
   (let [{:keys [name keys]} table

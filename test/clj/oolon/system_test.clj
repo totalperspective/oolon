@@ -13,13 +13,19 @@
 (def perm-table
   (t/table :perm {:x :keyword :y :keyword}))
 
+(def add-sym-table
+  (t/scratch :add-sym {:name :keyword}))
+
 (def module
   (m/module
    :permutations
    [:state
     sym-table
     perm-table
+    add-sym-table
     :rules
+    (d/rule [:sym {:name :?n}]
+            [[:add-sym {:name :?n}]])
     (d/rule [:perm {:x :?x :y :?y}]
             [[:sym#1 {:name :?x}]
              [:sym#2 {:name :?y}]
@@ -31,7 +37,8 @@
          (fact "We can ennumerate all the tables"
                (tables sys) => {:system system-table
                                 :sym sym-table
-                                :perm perm-table})
+                                :perm perm-table
+                                :add-sym add-sym-table})
          (fact "The system is not started"
                (started? sys) => false)
          (fact "We cannot assert anything yet"
@@ -100,3 +107,30 @@
                   [:sym {:name :b}]
                   [:perm {:x :a :y :b}]
                   [:perm {:x :b :y :a}])))))
+
+(facts "About scratch tables"
+       (let [conn (ds/create-conn {})
+             sys  (-> :test
+                      (system conn [module])
+                      start!
+                      (+fact [:add-sym {:name :a}])
+                      run!)]
+         (fact "Running the system moves to the next timestep and adds the new facts"
+               (let [s (state sys)]
+                 (count s) => 3
+                 (tabular
+                  (fact "We have all the facts we expect"
+                        (s ?fact) => ?fact)
+                  ?fact
+                  [:system {:name :test :timestep 2}]
+                  [:add-sym {:name :a}]
+                  [:sym {:name :a}])))
+         (fact "Running again does nothing but the scratch table is empty"
+               (let [s (state (run! sys))]
+                 (count s) => 2
+                 (tabular
+                  (fact "We have all the facts we expect"
+                        (s ?fact) => ?fact)
+                  ?fact
+                  [:system {:name :test :timestep 2}]
+                  [:sym {:name :a}])))))
