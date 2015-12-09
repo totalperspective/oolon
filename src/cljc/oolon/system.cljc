@@ -36,6 +36,17 @@
   (let [{:keys [modules]} sys]
     (into {:system system-table} (map :state modules))))
 
+(defn rules [sys]
+  (let [{:keys [modules]} sys]
+    (mapcat :rules modules)))
+
+(defn fact->record [sys fact]
+  (let [tables (tables sys)
+        [name attrs] fact
+        table (get tables name)]
+    (when table
+      (t/record table attrs))))
+
 (defn start! [sys]
   (if (started? sys)
     sys
@@ -47,13 +58,6 @@
       (db/add-attributes conn schema-tx)
       (db/transact conn [sys-ts])
       sys)))
-
-(defn fact->record [sys fact]
-  (let [tables (tables sys)
-        [name attrs] fact
-        table (get tables name)]
-    (when table
-      (t/record table attrs))))
 
 (defn +fact [sys fact]
   (when (started? sys)
@@ -79,16 +83,42 @@
            (mapcat (partial table->facts sys))
            (into #{})))))
 
+(defn run-rule [db tables rule]
+  (let [{:keys [head-form head body]} rule
+        table (get tables (first head-form))
+        lvars (into [] (d/lvars head))]
+    (->> {:find lvars :where body}
+         (db/q db)
+         (map (partial zipmap lvars))
+         (map (partial d/bind-form head))
+         (map (partial t/add-id table)))))
+
+(defn run-rules!
+  ([db sys]
+   (run-rules! db sys #{} 999))
+  ([db sys tx-acc max]
+   (when (pos? max)
+     (let [rules (rules sys)
+           tx-data (mapcat (partial run-rule db (tables sys)) rules)
+           tx-acc (into tx-acc tx-data)
+           db (db/with db tx-data)
+           tx-data (get-in db [:last-tx :tx-data])]
+       (if (empty? tx-data)
+         tx-acc
+         (recur db sys tx-acc (dec max)))))))
+
 (defn run! [sys]
   (when (started? sys)
     (let [{:keys [facts name conn]} sys
           {:keys [assertions]} facts
-          {:keys [tx-data] :as tx} @(db/transact conn assertions)
+          {:keys [tx-data]} @(db/transact conn assertions)
           sys (assoc sys :facts empty-facts)]
       (if (empty? tx-data)
         sys
-        (let [[[_ ts-attrs]] (table->facts sys system-table)
+        (let [db (db/db conn)
+              [[_ ts-attrs]] (table->facts sys system-table)
               timestep (:timestep ts-attrs)
-              next-t (t/record system-table {:name name :timestep (inc timestep)})]
-          @(db/transact conn [next-t])
+              next-t (t/record system-table {:name name :timestep (inc timestep)})
+              tx (into [next-t] (run-rules! db sys))]
+          @(db/transact conn tx)
           sys)))))

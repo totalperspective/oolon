@@ -21,9 +21,9 @@
     perm-table
     :rules
     (d/rule [:perm {:x :?x :y :?y}]
-            [[:sym {:name :?x}]
-             [:sym {:name :?y}]
-             '(!= ?x ?y)])]))
+            [[:sym#1 {:name :?x}]
+             [:sym#2 {:name :?y}]
+             '[(!= ?x ?y)]])]))
 
 (facts "About a new system"
        (let [conn (ds/create-conn {})
@@ -67,3 +67,36 @@
             (fact "Running again does nothing"
                   (state (run! sys)) => #{[:system {:name :test :timestep 2}]
                                           [:sym {:name :a}]})))
+
+(facts "About asserting a facts that trigger rules"
+       (let [conn (ds/create-conn {})
+             sys  (-> :test
+                      (system conn [module])
+                      start!
+                      (+fact [:sym {:name :a}])
+                      (+fact [:sym {:name :b}])
+                      run!)]
+         (fact "Running the system moves to the next timestep and adds the new facts"
+               (let [s (state sys)]
+                 (count s) => 5
+                 (tabular
+                  (fact "We have all the facts we expect"
+                        (s ?fact) => ?fact)
+                  ?fact
+                  [:system {:name :test :timestep 2}]
+                  [:sym {:name :a}]
+                  [:sym {:name :b}]
+                  [:perm {:x :a :y :b}]
+                  [:perm {:x :b :y :a}])))
+         (fact "Running again does nothing"
+               (let [s (state (run! sys))]
+                 (count s) => 5
+                 (tabular
+                  (fact "We have all the facts we expect"
+                        (s ?fact) => ?fact)
+                  ?fact
+                  [:system {:name :test :timestep 2}]
+                  [:sym {:name :a}]
+                  [:sym {:name :b}]
+                  [:perm {:x :a :y :b}]
+                  [:perm {:x :b :y :a}])))))

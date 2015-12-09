@@ -100,12 +100,13 @@
 
 (def default-rule {})
 
-(defn rule [head body]
-  (let [head (rel->map head)
+(defn rule [head-form body]
+  (let [head (rel->map head-form)
         body (query* body)
         safe? (safe? head body)
         neg? (not (empty? (negative body)))]
     (-> default-rule
+        (assoc :head-form head-form)
         (assoc :head head)
         (assoc :body body)
         (assoc :safe? safe?)

@@ -19,6 +19,7 @@
         :_    '_
         :?s   '?s))
 
+
 (facts "About rel->eavt"
        (rel->eavt :link nil) => nil
        (rel->eavt :link {}) => '[[?link :link/$id ?link$id]]
