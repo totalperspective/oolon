@@ -10,8 +10,7 @@
        {:name :link
         :keys {:src :keyword
                :dst :keyword}
-        :vals {:cost :long}
-        :type :table}
+        :vals {:cost :long}}
 
        (table :link
               {:src :keyword :dst :keyword}
@@ -22,7 +21,7 @@
         :keys {:src :keyword
                :dst :keyword}
         :vals {:cost :long}
-        :type :scratch}
+        :scratch true}
 
        (scratch :link
                 {:src :keyword :dst :keyword}
