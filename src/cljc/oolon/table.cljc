@@ -17,8 +17,11 @@
                   :keys keys
                   :vals vals}))))
 
-(defn scratch [name keys vals]
-  (table name keys vals :scratch))
+(defn scratch
+  ([name keys]
+   (scratch name keys {}))
+  ([name keys vals]
+   (table name keys vals :scratch)))
 
 (defn record [table row]
   (let [{:keys [name keys]} table
