@@ -30,7 +30,7 @@
     perm-table
     add-sym-table
     send-table
-    (t/defer recv-table)
+    recv-table
     :rules
     (d/rule [:perm {:x :?x :y :?y}]
             [[:sym#1 {:name :?x}]
@@ -38,8 +38,8 @@
              '[(!= ?x ?y)]])
     (d/rule [:sym {:name :?n}]
             [[:add-sym {:name :?n}]])
-    (d/rule [:recv {:name :?n}]
-            [[:send {:name :?n}]])]))
+    (d/rule+ [:recv {:name :?n}]
+             [[:send {:name :?n}]])]))
 
 (facts "About a new system"
        (let [conn (ds/create-conn {})
@@ -50,7 +50,7 @@
                                 :perm perm-table
                                 :add-sym add-sym-table
                                 :send send-table
-                                :recv (t/defer recv-table)})
+                                :recv recv-table})
          (fact "The system is not started"
                (started? sys) => false)
          (fact "We cannot assert anything yet"

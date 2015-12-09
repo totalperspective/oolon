@@ -1,6 +1,6 @@
 (ns oolon.table)
 
-(def opt? #{:scratch :deferred})
+(def opt? #{:scratch})
 
 (defn table
   ([name keys]
@@ -22,9 +22,6 @@
    (scratch name keys {}))
   ([name keys vals]
    (table name keys vals :scratch)))
-
-(defn defer [table]
-  (assoc table :deferred true))
 
 (defn record [table row]
   (let [{:keys [name keys]} table

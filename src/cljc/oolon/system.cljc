@@ -86,7 +86,7 @@
 (defn run-rule [db tables rule]
   (let [{:keys [head-form head body]} rule
         table (get tables (first head-form))
-        defer (:deferred table)
+        defer (:deferred rule)
         lvars (into [] (d/lvars head))]
     [defer (->> {:find lvars :where body}
                 (db/q db)
