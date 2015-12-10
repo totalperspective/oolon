@@ -1,6 +1,6 @@
-(defproject oolon "0.1.0-SNAPSHOT"
-  :description "FIXME: write description"
-  :url "http://example.com/FIXME"
+(defproject totalperspective/oolon "0.1.0"
+  :description "Bloom implementation for Clojure/ClojureScript leaning on Datomic datalog"
+  :url "https://github.com/totalperspective/oolon"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :test-paths ["test/clj"]
