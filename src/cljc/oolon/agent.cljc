@@ -1,5 +1,5 @@
 (ns oolon.agent
-  (:refer-clojure :exclude [run! agent])
+  (:refer-clojure :exclude [agent])
   (:require [oolon.table :as t]
             [oolon.datalog :as d]
             [oolon.module :as m]

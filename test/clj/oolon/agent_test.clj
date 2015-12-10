@@ -1,5 +1,5 @@
 (ns oolon.agent-test
-  (:refer-clojure :exclude [run! agent])
+  (:refer-clojure :exclude [agent])
   (:require [oolon.agent :refer :all]
             [midje.sweet :refer :all]
             [oolon.table :as t]
