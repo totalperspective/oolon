@@ -23,26 +23,29 @@ the :tempids member returned through transact or with"))
 
 ;; ## Test functions
 
-(defn proto-fn [proto?]
-  (fn [f]
-    (fn [r & args]
-      {:pre [(proto? r)]}
-      (apply f r args))))
-
 (defn conn? [x]
   (satisfies? Conn x))
 
-(def conn-fn (proto-fn conn?))
+(defn conn-fn [f]
+  (fn [r & args]
+    {:pre [(conn? r)]}
+    (apply f r args)))
 
 (defn has-db? [x]
   (satisfies? HasDb x))
 
-(def has-db-fn (proto-fn has-db?))
+(defn has-db-fn [f]
+  (fn [r & args]
+    {:pre [(has-db? r)]}
+    (apply f r args)))
 
 (defn db? [x]
   (satisfies? Db x))
 
-(def db-fn (proto-fn db?))
+(defn db-fn [f]
+  (fn [r & args]
+    {:pre [(db? r)]}
+    (apply f r args)))
 
 ;; ## Wraped entry points
 
