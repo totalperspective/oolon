@@ -56,7 +56,7 @@
          (fact "We cannot assert anything yet"
                (+fact sys [:foo {:bar :baz}]) => nil)
          (fact "We cannot run anything yet"
-               (run! sys) => nil)
+               (tick! sys) => nil)
          (fact "We have no state"
                (state sys) => nil)))
 
@@ -70,7 +70,7 @@
          (fact "The state contains only the initial timestep"
                (state sys) => #{[:system {:name :test :timestep 1}]})
          (fact "Running the system is a noop"
-               (run! sys) => sys)))
+               (tick! sys) => sys)))
 
 (facts "About asserting a fact that triggers no rules"
           (let [conn (ds/create-conn {})
@@ -81,10 +81,10 @@
             (fact "Before we run nothing has changed"
                   (state sys) => #{[:system {:name :test :timestep 1}]})
             (fact "Running the system moves to the next timestep and adds the fact"
-                  (state (run! sys)) => #{[:system {:name :test :timestep 2}]
+                  (state (tick! sys)) => #{[:system {:name :test :timestep 2}]
                                           [:sym {:name :a}]})
             (fact "Running again does nothing"
-                  (state (run! sys)) => #{[:system {:name :test :timestep 2}]
+                  (state (tick! sys)) => #{[:system {:name :test :timestep 2}]
                                           [:sym {:name :a}]})))
 
 (facts "About asserting a facts that trigger rules"
@@ -94,7 +94,7 @@
                       start!
                       (+fact [:sym {:name :a}])
                       (+fact [:sym {:name :b}])
-                      run!)]
+                      tick!)]
          (fact "Running the system moves to the next timestep and adds the new facts"
                (let [s (state sys)]
                  (count s) => 5
@@ -108,7 +108,7 @@
                   [:perm {:x :a :y :b}]
                   [:perm {:x :b :y :a}])))
          (fact "Running again does nothing"
-               (let [s (state (run! sys))]
+               (let [s (state (tick! sys))]
                  (count s) => 5
                  (tabular
                   (fact "We have all the facts we expect"
@@ -126,7 +126,7 @@
                       (system conn [module])
                       start!
                       (+fact [:add-sym {:name :a}])
-                      run!)]
+                      tick!)]
          (fact "Running the system moves to the next timestep and adds the new facts"
                (let [s (state sys)]
                  (count s) => 3
@@ -138,7 +138,7 @@
                   [:add-sym {:name :a}]
                   [:sym {:name :a}])))
          (fact "Running again does nothing but the scratch table is empty"
-               (let [s (state (run! sys))]
+               (let [s (state (tick! sys))]
                  (count s) => 2
                  (tabular
                   (fact "We have all the facts we expect"
@@ -153,7 +153,7 @@
                       (system conn [module])
                       start!
                       (+fact [:send {:name :a}])
-                      run!)]
+                      tick!)]
          (fact "Running the system moves to the next timestep and adds the new fact"
                (let [s (state sys)]
                  (count s) => 2
@@ -164,7 +164,7 @@
                   [:system {:name :test :timestep 2}]
                   [:send {:name :a}])))
          (fact "Running the system again moves to the next timestep, removes the scratch and adds the deffered fact"
-               (let [s (state (run! sys))]
+               (let [s (state (tick! sys))]
                  (count s) => 2
                  (tabular
                   (fact "We have all the facts we expect"
@@ -173,7 +173,7 @@
                   [:system {:name :test :timestep 3}]
                   [:recv {:name :a}])))
          (fact "Running again does nothing"
-               (let [s (state (run! sys))]
+               (let [s (state (tick! sys))]
                  (count s) => 2
                  (tabular
                   (fact "We have all the facts we expect"

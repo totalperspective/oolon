@@ -127,7 +127,7 @@
                       (filter :scratch (vals (tables sys))))]
     @(db/transact conn tx)))
 
-(defn run! [sys]
+(defn tick! [sys]
   (when (started? sys)
     (clean-scratch! sys)
     (let [{:keys [facts name conn]} sys
