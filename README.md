@@ -30,7 +30,7 @@ for building systems
 that manage state over time.
 Based on the [Bloom](http://bloom-lang.net/) language
 (developed by the [BOOM](http://boom.cs.berkeley.edu/) team at Berkeley UC)
-it embraces the disorder systems 
+it embraces the disorder in systems 
 in both its semantics and execution.
 
 Implemented as a data oriented DSL
@@ -41,7 +41,7 @@ and operation.
 The data orientated DSL means that
 using Oolon in Java and JavaScript
 is a simple matter of exchanging data
-(except that, right now, it's a pain in the but).
+(except that, right now, it's a pain in the butt).
 
 Oolon can be used to build
 distributed systems,
