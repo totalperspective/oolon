@@ -30,7 +30,7 @@ for building systems
 that manage state over time.
 Based on the [Bloom](http://bloom-lang.net/) language
 (developed by the [BOOM](http://boom.cs.berkeley.edu/) team at Berkeley UC)
-it embraces the disorder systems 
+it embraces the disorder in systems 
 in both its semantics and execution.
 
 Implemented as a data oriented DSL
@@ -67,7 +67,8 @@ lein install
 #### Leiningen
 
 ```clojure
-:require [[totalperspective/oolon 0.1.0]]
+:require [[totalperspective/oolon "0.1.0"]
+          [datascript "0.13.3"]]
 ```
 
 ### Usage
