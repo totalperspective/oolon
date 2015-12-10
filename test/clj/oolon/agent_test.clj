@@ -1,6 +1,6 @@
-(ns oolon.system-test
-  (:refer-clojure :exclude [run!])
-  (:require [oolon.system :refer :all]
+(ns oolon.agent-test
+  (:refer-clojure :exclude [run! agent])
+  (:require [oolon.agent :refer :all]
             [midje.sweet :refer :all]
             [oolon.table :as t]
             [oolon.datalog :as d]
@@ -53,9 +53,9 @@
 
 (facts "About a new system"
        (let [conn (ds/create-conn {})
-             sys (system :test conn [module])]
+             sys (agent :test conn [module])]
          (fact "We can ennumerate all the tables"
-               (tables sys) => {:system system-table
+               (tables sys) => {:agent system-table
                                 :sym sym-table
                                 :perm perm-table
                                 :add-sym add-sym-table
@@ -74,35 +74,35 @@
 
 (facts "About a started system"
        (let [conn (ds/create-conn {})
-             sys (start! (system :test conn [module]))]
+             sys (start! (agent :test conn [module]))]
          (fact "The system is started"
                (started? sys) => true)
          (fact "Starting twice is a noop"
                (start! sys) => sys)
          (fact "The state contains only the initial timestep"
-               (state sys) => #{[:system {:name :test :timestep 1}]})
+               (state sys) => #{[:agent {:name :test :timestep 1}]})
          (fact "Running the system is a noop"
                (tick! sys) => sys)))
 
 (facts "About asserting a fact that triggers no rules"
           (let [conn (ds/create-conn {})
                 sys  (-> :test
-                         (system conn [module])
+                         (agent conn [module])
                          start!
                          (+fact [:sym {:name :a}]))]
             (fact "Before we run nothing has changed"
-                  (state sys) => #{[:system {:name :test :timestep 1}]})
+                  (state sys) => #{[:agent {:name :test :timestep 1}]})
             (fact "Running the system moves to the next timestep and adds the fact"
-                  (state (tick! sys)) => #{[:system {:name :test :timestep 2}]
+                  (state (tick! sys)) => #{[:agent {:name :test :timestep 2}]
                                           [:sym {:name :a}]})
             (fact "Running again does nothing"
-                  (state (tick! sys)) => #{[:system {:name :test :timestep 2}]
+                  (state (tick! sys)) => #{[:agent {:name :test :timestep 2}]
                                           [:sym {:name :a}]})))
 
 (facts "About asserting a facts that trigger rules"
        (let [conn (ds/create-conn {})
              sys  (-> :test
-                      (system conn [module])
+                      (agent conn [module])
                       start!
                       (+fact [:sym {:name :a}])
                       (+fact [:sym {:name :b}])
@@ -114,7 +114,7 @@
                   (fact "We have all the facts we expect"
                         (s ?fact) => ?fact)
                   ?fact
-                  [:system {:name :test :timestep 2}]
+                  [:agent {:name :test :timestep 2}]
                   [:sym {:name :a}]
                   [:sym {:name :b}]
                   [:perm {:x :a :y :b}]
@@ -126,7 +126,7 @@
                   (fact "We have all the facts we expect"
                         (s ?fact) => ?fact)
                   ?fact
-                  [:system {:name :test :timestep 2}]
+                  [:agent {:name :test :timestep 2}]
                   [:sym {:name :a}]
                   [:sym {:name :b}]
                   [:perm {:x :a :y :b}]
@@ -135,7 +135,7 @@
 (facts "About scratch tables"
        (let [conn (ds/create-conn {})
              sys  (-> :test
-                      (system conn [module])
+                      (agent conn [module])
                       start!
                       (+fact [:add-sym {:name :a}])
                       tick!)]
@@ -146,7 +146,7 @@
                   (fact "We have all the facts we expect"
                         (s ?fact) => ?fact)
                   ?fact
-                  [:system {:name :test :timestep 2}]
+                  [:agent {:name :test :timestep 2}]
                   [:add-sym {:name :a}]
                   [:sym {:name :a}])))
          (fact "Running again does nothing but the scratch table is empty"
@@ -156,13 +156,13 @@
                   (fact "We have all the facts we expect"
                         (s ?fact) => ?fact)
                   ?fact
-                  [:system {:name :test :timestep 2}]
+                  [:agent {:name :test :timestep 2}]
                   [:sym {:name :a}])))))
 
 (facts "About deferred inserts"
        (let [conn (ds/create-conn {})
              sys  (-> :test
-                      (system conn [module])
+                      (agent conn [module])
                       start!
                       (+fact [:send {:name :a}])
                       tick!)]
@@ -173,7 +173,7 @@
                   (fact "We have all the facts we expect"
                         (s ?fact) => ?fact)
                   ?fact
-                  [:system {:name :test :timestep 2}]
+                  [:agent {:name :test :timestep 2}]
                   [:send {:name :a}])))
          (fact "Running the system again moves to the next timestep, removes the scratch and adds the deffered fact"
                (let [s (state (tick! sys))]
@@ -182,7 +182,7 @@
                   (fact "We have all the facts we expect"
                         (s ?fact) => ?fact)
                   ?fact
-                  [:system {:name :test :timestep 3}]
+                  [:agent {:name :test :timestep 3}]
                   [:recv {:name :a}])))
          (fact "Running again does nothing"
                (let [s (state (tick! sys))]
@@ -191,13 +191,13 @@
                   (fact "We have all the facts we expect"
                         (s ?fact) => ?fact)
                   ?fact
-                  [:system {:name :test :timestep 3}]
+                  [:agent {:name :test :timestep 3}]
                   [:recv {:name :a}])))))
 
 (facts "About channels"
        (let [conn (ds/create-conn {})
              sys  (-> :test
-                      (system conn [module])
+                      (agent conn [module])
                       start!
                       (+fact [:chan-in {:msg :foo}])
                       tick!)]
@@ -208,7 +208,7 @@
                   (fact "We have all the facts we expect"
                         (s ?fact) => ?fact)
                   ?fact
-                  [:system {:name :test :timestep 2}]
+                  [:agent {:name :test :timestep 2}]
                   [:chan-in {:msg :foo}])
                  (fact "We also have the msg in the out buffer"
                        (out sys) => #{[:chan-out {:msg :foo}]})))
@@ -219,4 +219,4 @@
                   (fact "We have all the facts we expect"
                         (s ?fact) => ?fact)
                   ?fact
-                  [:system {:name :test :timestep 2}])))))
+                  [:agent {:name :test :timestep 2}])))))

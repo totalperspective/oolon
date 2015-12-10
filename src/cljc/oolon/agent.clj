@@ -1,5 +1,5 @@
-(ns oolon.system
-  (:refer-clojure :exclude [run!])
+(ns oolon.agent
+  (:refer-clojure :exclude [run! agent])
   (:require [oolon.table :as t]
             [oolon.datalog :as d]
             [oolon.module :as m]
@@ -10,7 +10,7 @@
   {:assertions #{}
    :retractions #{}})
 
-(defn system [name conn modules]
+(defn agent [name conn modules]
   {:pre [(db/conn? conn)]}
   {:name name
    :conn conn
@@ -24,17 +24,17 @@
           time (ffirst (db/q db
                              {:find '[?t]
                               :where
-                              (d/rel->eavt :system
+                              (d/rel->eavt :agent
                                            {:name name
                                             :timestep :?t})}))]
       (pos? (or time 0)))
     false))
 
-(def system-table (t/table :system {:name :keyword} {:timestep :long}))
+(def system-table (t/table :agent {:name :keyword} {:timestep :long}))
 
 (defn tables [sys]
   (let [{:keys [modules]} sys]
-    (into {:system system-table} (map :state modules))))
+    (into {:agent system-table} (map :state modules))))
 
 (defn rules [sys]
   (let [{:keys [modules]} sys]
