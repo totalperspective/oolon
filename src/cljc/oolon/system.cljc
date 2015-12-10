@@ -83,16 +83,23 @@
            (mapcat (partial table->facts sys))
            (into #{})))))
 
+(defn out [sys]
+  (when (started? sys)
+    (get-in sys [:facts :out])))
+
 (defn run-rule [db tables rule]
   (let [{:keys [head-form head body]} rule
         table (get tables (first head-form))
         defer (:deferred rule)
+        channel? (:channel table)
         lvars (into [] (d/lvars head))]
     [defer (->> {:find lvars :where body}
                 (db/q db)
                 (map (partial zipmap lvars))
-                (map (partial d/bind-form head))
-                (map (partial t/add-id table)))]))
+                (map (fn [fact]
+                       (if channel?
+                         (d/bind-form head-form fact)
+                         (t/add-id table (d/bind-form head fact))))))]))
 
 (defn run-rules!
   ([db sys]
@@ -132,7 +139,7 @@
     (clean-scratch! sys)
     (let [{:keys [facts name conn]} sys
           {:keys [assertions]} facts
-          {:keys [tx-data]} @(db/transact conn assertions)
+          {:keys [tx-data]} @(db/transact conn (seq assertions))
           sys (assoc sys :facts empty-facts)]
       (if (empty? tx-data)
         sys
@@ -142,6 +149,13 @@
               next-t (t/record system-table {:name name :timestep (inc timestep)})
               [tx-now tx-next] (run-rules! db sys)
               tx (into [next-t] tx-now)
-              assertions (into [] tx-next)]
+              assertions (->> tx-next
+                              (filter map?)
+                              (into #{}))
+              chan-out (->> tx-next
+                            (remove map?)
+                            (into #{}))]
           @(db/transact conn tx)
-          (assoc-in sys [:facts :assertions] assertions))))))
+          (-> sys
+              (assoc-in [:facts :assertions] assertions)
+              (assoc-in [:facts :out] chan-out)))))))

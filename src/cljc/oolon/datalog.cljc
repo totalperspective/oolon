@@ -86,6 +86,9 @@
         neg-diff (clojure.set/difference neg-lvars pos-lvars)]
     (every? empty? [lhs-diff neg-diff])))
 
+(defn expand-form [form]
+  (clojure.walk/prewalk val->sym form))
+
 (defn rel->map [rel]
   (if (sequential? rel)
     (let [[rel-name attrs] rel]
@@ -96,7 +99,7 @@
                       [k (rel->map v)])
                     [(val->sym k) (val->sym v)])))
            (into {})))
-    (clojure.walk/prewalk val->sym rel)))
+    (expand-form rel)))
 
 (def default-rule {:insert true})
 
@@ -106,7 +109,7 @@
         safe? (safe? head body)
         neg? (not (empty? (negative body)))]
     (-> default-rule
-        (assoc :head-form head-form)
+        (assoc :head-form (expand-form head-form))
         (assoc :head head)
         (assoc :body body)
         (assoc :safe? safe?)
@@ -115,3 +118,7 @@
 (defn rule+ [head-form body]
   (-> (rule head-form body)
       (assoc :deferred true)))
+
+(defn rule> [head-form body]
+  (-> (rule+ head-form body)
+      (assoc :async true)))

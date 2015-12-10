@@ -22,6 +22,12 @@
 (def recv-table
   (t/table :recv {:name :keyword}))
 
+(def chan-in
+  (t/channel :chan-in {:msg :keyword}))
+
+(def chan-out
+  (t/channel :chan-out {:msg :keyword}))
+
 (def module
   (m/module
    :permutations
@@ -31,6 +37,8 @@
     add-sym-table
     send-table
     recv-table
+    chan-in
+    chan-out
     :rules
     (d/rule [:perm {:x :?x :y :?y}]
             [[:sym#1 {:name :?x}]
@@ -39,7 +47,9 @@
     (d/rule [:sym {:name :?n}]
             [[:add-sym {:name :?n}]])
     (d/rule+ [:recv {:name :?n}]
-             [[:send {:name :?n}]])]))
+             [[:send {:name :?n}]])
+    (d/rule> [:chan-out {:msg :?m}]
+             [[:chan-in {:msg :?m}]])]))
 
 (facts "About a new system"
        (let [conn (ds/create-conn {})
@@ -50,7 +60,9 @@
                                 :perm perm-table
                                 :add-sym add-sym-table
                                 :send send-table
-                                :recv recv-table})
+                                :recv recv-table
+                                :chan-in chan-in
+                                :chan-out chan-out})
          (fact "The system is not started"
                (started? sys) => false)
          (fact "We cannot assert anything yet"
@@ -181,3 +193,30 @@
                   ?fact
                   [:system {:name :test :timestep 3}]
                   [:recv {:name :a}])))))
+
+(facts "About channels"
+       (let [conn (ds/create-conn {})
+             sys  (-> :test
+                      (system conn [module])
+                      start!
+                      (+fact [:chan-in {:msg :foo}])
+                      tick!)]
+         (fact "Running the system moves to the next timestep and adds the new fact"
+               (let [s (state sys)]
+                 (count s) => 2
+                 (tabular
+                  (fact "We have all the facts we expect"
+                        (s ?fact) => ?fact)
+                  ?fact
+                  [:system {:name :test :timestep 2}]
+                  [:chan-in {:msg :foo}])
+                 (fact "We also have the msg in the out buffer"
+                       (out sys) => #{[:chan-out {:msg :foo}]})))
+         (fact "Running again does nothing but the scratch table is empty"
+               (let [s (state (tick! sys))]
+                 (count s) => 1
+                 (tabular
+                  (fact "We have all the facts we expect"
+                        (s ?fact) => ?fact)
+                  ?fact
+                  [:system {:name :test :timestep 2}])))))

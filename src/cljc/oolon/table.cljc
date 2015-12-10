@@ -1,6 +1,6 @@
 (ns oolon.table)
 
-(def opt? #{:scratch})
+(def opt? #{:scratch :channel})
 
 (defn table
   ([name keys]
@@ -22,6 +22,12 @@
    (scratch name keys {}))
   ([name keys vals]
    (table name keys vals :scratch)))
+
+(defn channel
+  ([name keys]
+   (channel name keys {}))
+  ([name keys vals]
+   (table name keys vals :scratch :channel)))
 
 (defn record [table row]
   (let [{:keys [name keys]} table
