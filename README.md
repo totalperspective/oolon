@@ -52,7 +52,23 @@ anything that involves dealing with ansynchrony.
 
 ### Installation
 
-*TODO*
+#### Git
+
+```sh
+git clone https://github.com/totalperspective/oolon.git
+cd oolon
+lein install
+```
+
+#### Clojars
+
+**Coming Soon**
+
+#### Leiningen
+
+```clojure
+:require [[totalperspective/oolon 0.1.0]]
+```
 
 ### Usage
 
@@ -209,11 +225,66 @@ to send facts to a channel.
 
 #### Agents
 
-#### Execution
+Agents provide a way to
+connect one or modules to
+a database backend
+and then manages
+the execution of the modules.
+
+```clojure
+(ns oolon-intro
+  (:require [oolon.core :as o]
+            [oolon.db.datascript :as ds]))
+
+(def module1 (o/module ...))
+(def module2 (o/module ...))
+(def my-schema ...)
+(def conn (ds/create-conn my-schema))
+(def agnt (o/agent :test conn
+                   [module1
+                    module2]))
+(o/start! agnt)
+```
+
+##### Execution
+
+The execution of an agent follows a simple loop:
+
+ 1. Add any new facts to the the agent.
+ 2. Tick!
+ 3. Dispatch any outgoing facts.
+ 4. Repeat.
+
+Facts in and out take the same form as in rules:
+
+```clojure
+[:table-name {:attr1 val1 :attr2 val2}]
+```
+
+```clojure
+(defn tick-agent! [agnt new-facts]
+  (let [agnt (reduce o/+fact agnt new-facts)]
+    (o/tick! agnt)
+    [agnt (o/out agnt)]))
+
+(defn run-agent [agnt]
+  (loop [agnt agnt]
+    (let [new-facts (get-new-facts ...)
+          [agnt out] (tick-agent! agnt new-facts)]
+      (dispatch out)
+      (recur agnt))))
+```
+
+This can be run in a core.async go loop
+or anything you like.
 
 ## Java/JavaScript
 
-*TODO*
+**Coming Soon**
+
+## Datomic Backend
+
+**Coming Soon**
 
 ## License
 
