@@ -28,41 +28,51 @@
 (def chan-out
   (t/channel :chan-out {:msg :keyword}))
 
+(def loop-send
+  (t/scratch :loop-send {:msg :keyword}))
+
+(def loop-chan
+  (t/loopback :loop {:msg :keyword}))
+
+(def loop-recv
+  (t/scratch :loop-recv {:msg :keyword}))
+
+(def module-tables {:agent system-table
+                    :sym sym-table
+                    :perm perm-table
+                    :add-sym add-sym-table
+                    :send send-table
+                    :recv recv-table
+                    :chan-in chan-in
+                    :chan-out chan-out
+                    :loop-send loop-send
+                    :loop loop-chan
+                    :loop-recv loop-recv})
+
 (def module
   (m/module
    :permutations
-   [:state
-    sym-table
-    perm-table
-    add-sym-table
-    send-table
-    recv-table
-    chan-in
-    chan-out
-    :rules
-    (d/rule [:perm {:x :?x :y :?y}]
-            [[:sym#1 {:name :?x}]
-             [:sym#2 {:name :?y}]
-             '[(!= ?x ?y)]])
-    (d/rule [:sym {:name :?n}]
-            [[:add-sym {:name :?n}]])
-    (d/rule+ [:recv {:name :?n}]
-             [[:send {:name :?n}]])
-    (d/rule> [:chan-out {:msg :?m}]
-             [[:chan-in {:msg :?m}]])]))
+   {:state (vals module-tables)
+    :rules [(d/rule [:perm {:x :?x :y :?y}]
+                    [[:sym#1 {:name :?x}]
+                     [:sym#2 {:name :?y}]
+                     '[(!= ?x ?y)]])
+            (d/rule [:sym {:name :?n}]
+                    [[:add-sym {:name :?n}]])
+            (d/rule+ [:recv {:name :?n}]
+                     [[:send {:name :?n}]])
+            (d/rule> [:chan-out {:msg :?m}]
+                     [[:chan-in {:msg :?m}]])
+            (d/rule> [:loop {:msg :?m}]
+                     [[:loop-send {:msg :?m}]])
+            (d/rule [:loop-recv {:msg :?m}]
+                    [[:loop {:msg :?m}]])]}))
 
 (facts "About a new system"
        (let [conn (ds/create-conn {})
              sys (agent :test conn [module])]
          (fact "We can ennumerate all the tables"
-               (tables sys) => {:agent system-table
-                                :sym sym-table
-                                :perm perm-table
-                                :add-sym add-sym-table
-                                :send send-table
-                                :recv recv-table
-                                :chan-in chan-in
-                                :chan-out chan-out})
+               (tables sys) => module-tables)
          (fact "The system is not started"
                (started? sys) => false)
          (fact "We cannot assert anything yet"
@@ -201,15 +211,14 @@
                       start!
                       (+fact [:chan-in {:msg :foo}])
                       tick!)]
-         (fact "Running the system moves to the next timestep and adds the new fact"
+         (fact "Running the system moves to the next timestep and send the out msg"
                (let [s (state sys)]
-                 (count s) => 2
+                 (count s) => 1
                  (tabular
                   (fact "We have all the facts we expect"
                         (s ?fact) => ?fact)
                   ?fact
-                  [:agent {:name :test :timestep 2}]
-                  [:chan-in {:msg :foo}])
+                  [:agent {:name :test :timestep 2}])
                  (fact "We also have the msg in the out buffer"
                        (out sys) => #{[:chan-out {:msg :foo}]})))
          (fact "Running again does nothing but the scratch table is empty"
@@ -220,3 +229,35 @@
                         (s ?fact) => ?fact)
                   ?fact
                   [:agent {:name :test :timestep 2}])))))
+
+(facts "About loopback channels"
+       (let [conn (ds/create-conn {})
+             agnt  (-> :test
+                       (agent conn [module])
+                       start!
+                       (+fact [:loop-send {:msg :foo}])
+                       tick!)]
+         (fact "Running the system moves to the next timestep and adds the new fact"
+               (let [s (state agnt)]
+                 (tabular
+                  (fact "We have all the facts we expect"
+                        (s ?fact) => ?fact)
+                  ?fact
+                  [:agent {:name :test :timestep 2}]
+                  [:loop-send {:msg :foo}])))
+         (fact "Running again asserts the looped msg"
+               (let [agnt (tick! agnt)
+                     s (state agnt)]
+                 (tabular
+                  (fact "We have all the facts we expect"
+                        (s ?fact) => ?fact)
+                  ?fact
+                  [:agent {:name :test :timestep 3}]
+                  [:loop-recv {:msg :foo}])
+                 (fact "Running again empties the sratch table but does not advance"
+                       (let [s (state (tick! agnt))]
+                         (tabular
+                          (fact "We have all the facts we expect"
+                                (s ?fact) => ?fact)
+                          ?fact
+                          [:agent {:name :test :timestep 3}])))))))
