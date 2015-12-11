@@ -98,7 +98,10 @@
                 (map (partial zipmap lvars))
                 (map (fn [fact]
                        (if channel?
-                         (d/bind-form head-form fact)
+                         (let [rel (d/bind-form head-form fact)]
+                           (if (:loopback table)
+                             (with-meta rel {:loopback true})
+                             rel))
                          (t/add-id table (d/bind-form head fact))))))]))
 
 (defn run-rules!
@@ -122,7 +125,7 @@
          [tx-acc deferred]
          (recur db sys tx-acc deferred (dec max)))))))
 
-(defn clean-scratch! [sys]
+(defn clean-type! [sys type]
   (let [{:keys [conn]} sys
         db (db/db conn)
         tx (mapcat (fn [{:keys [name]}]
@@ -131,8 +134,18 @@
                                  [:db/retract e a v])
                                (db/q db {:find [e v]
                                          :where [[e a v]]}))))
-                      (filter :scratch (vals (tables sys))))]
+                      (filter type (vals (tables sys))))]
     @(db/transact conn tx)))
+
+(defn clean-scratch! [sys]
+  (clean-type! sys :scratch))
+
+(defn clean-channel! [sys]
+  (clean-type! sys :channel))
+
+(defn loopback? [rel]
+  (let [m (meta rel)]
+    (:loopback m)))
 
 (defn tick! [sys]
   (when (started? sys)
@@ -154,8 +167,15 @@
                               (into #{}))
               chan-out (->> tx-next
                             (remove map?)
-                            (into #{}))]
+                            (remove loopback?)
+                            (into #{}))
+              assertions (->> tx-next
+                              (remove map?)
+                              (filter loopback?)
+                              (map (partial fact->record sys))
+                              (into assertions))]
           @(db/transact conn tx)
+          (clean-channel! sys)
           (-> sys
               (assoc-in [:facts :assertions] assertions)
               (assoc-in [:facts :out] chan-out)))))))
