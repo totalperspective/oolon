@@ -14,7 +14,10 @@
   (t/table :perm {:x :keyword :y :keyword}))
 
 (def add-sym-table
-  (t/scratch :add-sym {:name :keyword}))
+  (t/input :add-sym {:name :keyword}))
+
+(def sym-added-table
+  (t/output :sym-added {:name :keyword}))
 
 (def send-table
   (t/scratch :send {:name :keyword}))
@@ -41,6 +44,7 @@
                     :sym sym-table
                     :perm perm-table
                     :add-sym add-sym-table
+                    :sym-added sym-added-table
                     :send send-table
                     :recv recv-table
                     :chan-in chan-in
@@ -59,6 +63,8 @@
                      '[(!= ?x ?y)]])
             (d/rule [:sym {:name :?n}]
                     [[:add-sym {:name :?n}]])
+            (d/rule [:sym-added {:name :?n}]
+                    [[:sym {:name :?n}]])
             (d/rule+ [:recv {:name :?n}]
                      [[:send {:name :?n}]])
             (d/rule> [:chan-out {:msg :?m}]
@@ -67,6 +73,19 @@
                      [[:loop-send {:msg :?m}]])
             (d/rule [:loop-recv {:msg :?m}]
                     [[:loop {:msg :?m}]])]}))
+
+(def importing-module
+  (m/module
+   :importer
+   [:state
+    (t/channel :sym-chan {:name :keyword})
+    :import
+    module
+    :rules
+    (d/rule [:add-sym {:name :?n}]
+            [[:sym-chan {:name :?n}]])
+    (d/rule> [:sym-chan {:name :?n}]
+             [[:sym-added {:name :?n}]])]))
 
 (facts "About a new system"
        (let [conn (ds/create-conn {})
@@ -95,19 +114,19 @@
                (tick! sys) => sys)))
 
 (facts "About asserting a fact that triggers no rules"
-          (let [conn (ds/create-conn {})
-                sys  (-> :test
-                         (agent conn [module])
-                         start!
-                         (+fact [:sym {:name :a}]))]
-            (fact "Before we run nothing has changed"
-                  (state sys) => #{[:agent {:name :test :timestep 1}]})
-            (fact "Running the system moves to the next timestep and adds the fact"
-                  (state (tick! sys)) => #{[:agent {:name :test :timestep 2}]
-                                          [:sym {:name :a}]})
-            (fact "Running again does nothing"
-                  (state (tick! sys)) => #{[:agent {:name :test :timestep 2}]
-                                          [:sym {:name :a}]})))
+       (let [conn (ds/create-conn {})
+             sys  (-> :test
+                      (agent conn [module])
+                      start!
+                      (+fact [:perm {:x :a :y :b}]))]
+         (fact "Before we run nothing has changed"
+               (state sys) => #{[:agent {:name :test :timestep 1}]})
+         (fact "Running the system moves to the next timestep and adds the fact"
+               (state (tick! sys)) => #{[:agent {:name :test :timestep 2}]
+                                        [:perm {:x :a :y :b}]})
+         (fact "Running again does nothing"
+               (state (tick! sys)) => #{[:agent {:name :test :timestep 2}]
+                                        [:perm {:x :a :y :b}]})))
 
 (facts "About asserting a facts that trigger rules"
        (let [conn (ds/create-conn {})
@@ -119,7 +138,7 @@
                       tick!)]
          (fact "Running the system moves to the next timestep and adds the new facts"
                (let [s (state sys)]
-                 (count s) => 5
+                 (count s) => 7
                  (tabular
                   (fact "We have all the facts we expect"
                         (s ?fact) => ?fact)
@@ -127,6 +146,8 @@
                   [:agent {:name :test :timestep 2}]
                   [:sym {:name :a}]
                   [:sym {:name :b}]
+                  [:sym-added {:name :a}]
+                  [:sym-added {:name :b}]
                   [:perm {:x :a :y :b}]
                   [:perm {:x :b :y :a}])))
          (fact "Running again does nothing"
@@ -151,14 +172,15 @@
                       tick!)]
          (fact "Running the system moves to the next timestep and adds the new facts"
                (let [s (state sys)]
-                 (count s) => 3
+                 (count s) => 4
                  (tabular
                   (fact "We have all the facts we expect"
                         (s ?fact) => ?fact)
                   ?fact
                   [:agent {:name :test :timestep 2}]
                   [:add-sym {:name :a}]
-                  [:sym {:name :a}])))
+                  [:sym {:name :a}]
+                  [:sym-added {:name :a}])))
          (fact "Running again does nothing but the scratch table is empty"
                (let [s (state (tick! sys))]
                  (count s) => 2
@@ -261,3 +283,26 @@
                                 (s ?fact) => ?fact)
                           ?fact
                           [:agent {:name :test :timestep 3}])))))))
+
+(facts "About module importing"
+       (let [conn (ds/create-conn {})
+             agnt  (-> :test
+                       (agent conn [importing-module])
+                       start!
+                       (+fact [:sym-chan {:name :a}])
+                       tick!)
+             modules (->> agnt
+                          :modules
+                          (map :name)
+                          (into #{}))
+             s (state agnt)]
+         (fact "We have both modules loaded"
+               modules => #{:permutations :importer})
+         (fact "We have our symbol back on the output"
+               (out agnt) => #{[:sym-chan {:name :a}]})
+         (tabular
+          (fact "We have all the facts we expect"
+                (s ?fact) => ?fact)
+          ?fact
+          [:sym {:name :a}]
+          [:sym-added {:name :a}])))
