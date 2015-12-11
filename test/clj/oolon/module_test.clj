@@ -13,16 +13,27 @@
                         [:sym {:name :?y}]
                         '(!= ?x ?y)]))
 
+(def sub-module-1 (module :sub-1 {}))
+
+(def sub-module-2 (module :sub-2 {}))
+
+(def sub-module-3 (module :sub-3 {:import [sub-module-1 sub-module-2]}))
+
+(def import-module (module :imported {:import [sub-module-3]}))
+
 (def map-module (module :permutations
                         {:state [sym perm]
-                         :rules [make-perm]}))
+                         :rules [make-perm]
+                         :import [import-module]}))
 
 (def seq-module (module :permutations
                         [:state
                          sym
                          perm
                          :rules
-                         make-perm]))
+                         make-perm
+                         :import
+                         import-module]))
 
 (facts "About modules"
        (fact "Both creation methods yeld the same module"
@@ -34,4 +45,11 @@
        (fact "The module has a sym table"
              (get-in map-module [:state :perm]) => perm)
        (fact "The modules rules contains the make-perm rule"
-             (:rules map-module) => (contains make-perm)))
+             (:rules map-module) => (contains make-perm))
+       (fact "The import module is imported"
+             (:import map-module) => (contains import-module))
+       (fact "We can get all the imported modules"
+             (imports map-module) => (just #{import-module
+                                             sub-module-1
+                                             sub-module-2
+                                             sub-module-3})))

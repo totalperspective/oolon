@@ -10,11 +10,18 @@
   {:assertions #{}
    :retractions #{}})
 
+(defn all-modules [modules]
+  (->> modules
+       (mapcat m/imports)
+       (into modules)
+       distinct
+       vec))
+
 (defn agent [name conn modules]
   {:pre [(db/conn? conn)]}
   {:name name
    :conn conn
-   :modules modules
+   :modules (all-modules modules)
    :facts empty-facts})
 
 (defn started? [sys]

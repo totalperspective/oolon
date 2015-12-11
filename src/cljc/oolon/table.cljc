@@ -1,6 +1,10 @@
 (ns oolon.table)
 
-(def opt? #{:scratch :channel :loopback})
+(def opt? #{:scratch
+            :channel
+            :loopback
+            :input
+            :output})
 
 (defn table
   ([name keys]
@@ -22,6 +26,18 @@
    (scratch name keys {}))
   ([name keys vals]
    (table name keys vals :scratch)))
+
+(defn input
+  ([name keys]
+   (scratch name keys {}))
+  ([name keys vals]
+   (table name keys vals :scratch :input)))
+
+(defn output
+  ([name keys]
+   (scratch name keys {}))
+  ([name keys vals]
+   (table name keys vals :scratch :output)))
 
 (defn channel
   ([name keys]

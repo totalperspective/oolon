@@ -13,6 +13,12 @@
 
 (def channel t/channel)
 
+(def loopback t/loopback)
+
+(def input t/input)
+
+(def output t/output)
+
 ;; Modules
 
 (def module m/module)
