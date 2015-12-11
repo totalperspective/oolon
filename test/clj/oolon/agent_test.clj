@@ -316,15 +316,15 @@
     (t/table :everyone-likes {:name :keyword})
     (t/table :is-not-liked {:name :keyword})
     :rules
-    (d/rule [:everyone-likes {:name :?x}]
-            [[:person {:name :?x}]
-             '(not-join [?x]
-                        [:is-not-liked {:name :?x}])])
     (d/rule [:is-not-liked {:name :?y}]
             [[:person#x {:name :?x}]
              [:person#y {:name :?y}]
              '(not-join [?x ?y]
-                        [:likes {:person :?x :likes :?y}])])]))
+                        [:likes {:person :?x :likes :?y}])])
+    (d/rule [:everyone-likes {:name :?x}]
+            [[:person {:name :?x}]
+             '(not-join [?x]
+                        [:is-not-liked {:name :?x}])])]))
 
 (def data
   [[:person {:name :a}]

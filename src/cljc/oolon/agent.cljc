@@ -112,26 +112,33 @@
                              rel))
                          (t/add-id table (d/bind-form head fact))))))]))
 
+(defn stratify [rules]
+  (map vector (concat rules rules)))
+
 (defn run-rules!
   ([db sys]
-   (run-rules! db sys #{} #{} 999))
-  ([db sys tx-acc deferred max]
+   (let [rules (rules sys)
+         strata (stratify rules)]
+     (run-rules! db sys #{} #{} 999 strata)))
+  ([db sys tx-acc deferred max strata]
    (when (pos? max)
-     (let [rules (rules sys)
-           txes (map (partial run-rule db (tables sys)) rules)
-           [tx-data defer] (reduce (fn [[now next] [defer? tx]]
-                                     (if defer?
-                                       [now (into next tx)]
-                                       [(into now tx) next]))
-                                   [[] []]
-                                   txes)
-           tx-acc (into tx-acc tx-data)
-           deferred (into deferred defer)
-           db (db/with db tx-data)
-           tx-data (get-in db [:last-tx :tx-data])]
-       (if (empty? tx-data)
-         [tx-acc deferred]
-         (recur db sys tx-acc deferred (dec max)))))))
+     (if (empty? strata)
+       [tx-acc deferred]
+       (let [rules (first strata)
+             txes (map (partial run-rule db (tables sys)) rules)
+             [tx-data defer] (reduce (fn [[now next] [defer? tx]]
+                                       (if defer?
+                                         [now (into next tx)]
+                                         [(into now tx) next]))
+                                     [[] []]
+                                     txes)
+             tx-acc (into tx-acc tx-data)
+             deferred (into deferred defer)
+             db (db/with db tx-data)
+             tx-data (get-in db [:last-tx :tx-data])]
+         (if (empty? tx-data)
+           (recur db sys tx-acc deferred (dec max) (rest strata))
+           (recur db sys tx-acc deferred (dec max) strata)))))))
 
 (defn clean-type! [sys type]
   (let [{:keys [conn]} sys
