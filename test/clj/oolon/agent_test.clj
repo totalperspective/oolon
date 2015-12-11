@@ -306,3 +306,61 @@
           ?fact
           [:sym {:name :a}]
           [:sym-added {:name :a}])))
+
+(def double-neg-module
+  (m/module
+   :nm-module
+   [:state
+    (t/table :person {:name :keyword})
+    (t/table :likes {:person :keyword :likes :keyword})
+    (t/table :everyone-likes {:name :keyword})
+    (t/table :is-not-liked {:name :keyword})
+    :rules
+    (d/rule [:everyone-likes {:name :?x}]
+            [[:person {:name :?x}]
+             '(not-join [?x]
+                        [:is-not-liked {:name :?x}])])
+    (d/rule [:is-not-liked {:name :?y}]
+            [[:person#x {:name :?x}]
+             [:person#y {:name :?y}]
+             '(not-join [?x ?y]
+                        [:likes {:person :?x :likes :?y}])])]))
+
+(def data
+  [[:person {:name :a}]
+   [:person {:name :b}]
+   [:person {:name :c}]
+   [:person {:name :d}]
+   [:likes {:person :a :likes :a}]
+   [:likes {:person :b :likes :a}]
+   [:likes {:person :c :likes :a}]
+   [:likes {:person :d :likes :a}]])
+
+(defn add-data [agnt data]
+  (let [agnt (reduce +fact agnt data)]
+    agnt))
+
+(facts "About stratification"
+       (let [conn (ds/create-conn {})
+             agnt  (-> :test
+                       (agent conn [double-neg-module])
+                       start!
+                       (add-data data)
+                       tick!)]
+         (fact "Everyone likes a"
+               (let [s (state agnt)]
+                 (count s) => 9
+                 (tabular
+                  (fact "We have all the facts we expect"
+                        (s ?fact) => ?fact)
+                  ?fact
+                  [:is-not-liked {:name :d}]
+                  [:agent {:name :test, :timestep 2}]
+                  [:person {:name :d}]
+                  [:everyone-likes {:name :a}]
+                  [:is-not-liked {:name :c}]
+                  [:person {:name :b}]
+                  [:person {:name :c}]
+                  [:is-not-liked {:name :b}]
+                  [:person {:name :a}]
+                  [:agent {:name :test :timestep 2}])))))

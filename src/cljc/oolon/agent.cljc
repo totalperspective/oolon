@@ -99,8 +99,9 @@
         table (get tables (first head-form))
         defer (:deferred rule)
         channel? (:channel table)
-        lvars (into [] (d/lvars head))]
-    [defer (->> {:find lvars :where body}
+        lvars (into [] (d/lvars head))
+        q {:find lvars :where body}]
+    [defer (->> q
                 (db/q db)
                 (map (partial zipmap lvars))
                 (map (fn [fact]
