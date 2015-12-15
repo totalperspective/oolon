@@ -10,6 +10,13 @@
   {:assertions #{}
    :retractions #{}})
 
+(def init-schema
+  [{:db/ident :oolon.lineage/child
+    :db/valueType :db.type/ref}
+   {:db/ident :oolon.lineage/parent
+    :db/valueType :db.type/ref
+    :db/cardinality :db.cardinality/many}])
+
 (defn all-modules [modules]
   (->> modules
        (mapcat m/imports)
@@ -60,7 +67,7 @@
     (let [{:keys [conn modules name]} sys
           db (db/db conn)
           tables (vals (tables sys))
-          schema-tx (mapcat s/schema tables)
+          schema-tx (into init-schema (mapcat s/schema tables))
           sys-ts (t/record system-table {:name name :timestep 1})]
       (db/add-attributes conn schema-tx)
       (db/transact conn [sys-ts])
@@ -94,23 +101,37 @@
   (when (started? sys)
     (get-in sys [:facts :out])))
 
+(defn lineage [dep-lvars fact]
+  (let [dep-lvar? (apply hash-set dep-lvars)
+        lineage (->> fact
+                     (keep (fn [[k v]]
+                                   (when (dep-lvar? k)
+                                     v)))
+                     distinct)]
+    lineage))
+
 (defn run-rule [db tables rule]
-  (let [{:keys [head-form head body]} rule
+  (let [{:keys [head-form head body dep-lvars]} rule
         table (get tables (first head-form))
         defer (:deferred rule)
         channel? (:channel table)
-        lvars (into [] (d/lvars head))
+        lvars (into dep-lvars (d/lvars head))
         q {:find lvars :where body}]
     [defer (->> q
                 (db/q db)
                 (map (partial zipmap lvars))
+                distinct
                 (map (fn [fact]
-                       (if channel?
-                         (let [rel (d/bind-form head-form fact)]
-                           (if (:loopback table)
-                             (with-meta rel {:loopback true})
-                             rel))
-                         (t/add-id table (d/bind-form head fact))))))]))
+                       (let [lineage (lineage dep-lvars fact)]
+                         (if channel?
+                           (let [rel (d/bind-form head-form fact)]
+                             (if (:loopback table)
+                               (with-meta rel {:loopback true
+                                               :lineage lineage})
+                               (with-meta rel {:lineage lineage})))
+                           (with-meta
+                             (t/add-id table (d/bind-form head fact))
+                             {:lineage lineage}))))))]))
 
 (defn depends? [rules rule]
   (some (partial d/depends-on? rule) rules))
@@ -173,6 +194,24 @@
   (let [m (meta rel)]
     (:loopback m)))
 
+(defn get-fact-id [fact]
+  (->> fact
+       (filter (fn [[k v]]
+                 (= "$id" (name k))))
+       first
+       val))
+
+(defn apply-lineage [conn tx]
+  (mapcat (fn [fact]
+            (if-let [lineage (-> fact meta :lineage)]
+              (let [id (get-fact-id fact)
+                    lineage-entity {:db/id (db/tempid conn :db.part/user)
+                                    :oolon.lineage/child id
+                                    :oolon.lineage/parent lineage}]
+                [fact lineage-entity])
+              [fact]))
+          tx))
+
 (defn tick! [sys]
   (when (started? sys)
     (clean-scratch! sys)
@@ -187,9 +226,10 @@
               timestep (:timestep ts-attrs)
               next-t (t/record system-table {:name name :timestep (inc timestep)})
               [tx-now tx-next] (run-rules! db sys)
-              tx (into [next-t] tx-now)
+              tx (into [next-t] (apply-lineage conn tx-now))
               assertions (->> tx-next
                               (filter map?)
+                              (apply-lineage conn)
                               (into #{}))
               chan-out (->> tx-next
                             (remove map?)

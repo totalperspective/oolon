@@ -208,23 +208,24 @@
                   [:agent {:name :test :timestep 2}]
                   [:send {:name :a}])))
          (fact "Running the system again moves to the next timestep, removes the scratch and adds the deffered fact"
-               (let [s (state (tick! sys))]
+               (let [sys (tick! sys)
+                     s (state sys)]
                  (count s) => 2
                  (tabular
                   (fact "We have all the facts we expect"
                         (s ?fact) => ?fact)
                   ?fact
                   [:agent {:name :test :timestep 3}]
-                  [:recv {:name :a}])))
-         (fact "Running again does nothing"
-               (let [s (state (tick! sys))]
-                 (count s) => 2
-                 (tabular
-                  (fact "We have all the facts we expect"
-                        (s ?fact) => ?fact)
-                  ?fact
-                  [:agent {:name :test :timestep 3}]
-                  [:recv {:name :a}])))))
+                  [:recv {:name :a}])
+                 (fact "Running again does nothing"
+                       (let [s (state (tick! sys))]
+                         (count s) => 2
+                         (tabular
+                          (fact "We have all the facts we expect"
+                                (s ?fact) => ?fact)
+                          ?fact
+                          [:agent {:name :test :timestep 3}]
+                          [:recv {:name :a}])))))))
 
 (facts "About channels"
        (let [conn (ds/create-conn {})

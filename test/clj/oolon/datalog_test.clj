@@ -184,4 +184,9 @@ the body of the clause"
                 (depends-on? link-path path-path) => false
                 (depends-on? path-path link-path) => false
                 (depends-on? is-not-liked everyone-likes) => false
-                (depends-on? everyone-likes is-not-liked) => true)))
+                (depends-on? everyone-likes is-not-liked) => true)
+         (fact "We can aquire the lvars for the entities that the rule depends on"
+               (:dep-lvars link-path) => (just '#{?link})
+               (:dep-lvars path-path) => (just '#{?link ?path})
+               (:dep-lvars everyone-likes) => (just '#{?person})
+               (:dep-lvars is-not-liked) => (just '#{?personx ?persony}))))
