@@ -10,11 +10,29 @@
   {:assertions #{}
    :retractions #{}})
 
+(def init-schema
+  [{:db/ident :oolon.lineage/child
+    :db/index true
+    :db/valueType :db.type/ref
+    :db.install/_attribute :db.part/db}
+   {:db/ident :oolon.lineage/parent
+    :db/index true
+    :db/valueType :db.type/ref
+    :db/cardinality :db.cardinality/many
+    :db.install/_attribute :db.part/db}])
+
+(defn all-modules [modules]
+  (->> modules
+       (mapcat m/imports)
+       (into modules)
+       distinct
+       vec))
+
 (defn agent [name conn modules]
   {:pre [(db/conn? conn)]}
   {:name name
    :conn conn
-   :modules modules
+   :modules (all-modules modules)
    :facts empty-facts})
 
 (defn started? [sys]
@@ -53,7 +71,7 @@
     (let [{:keys [conn modules name]} sys
           db (db/db conn)
           tables (vals (tables sys))
-          schema-tx (mapcat s/schema tables)
+          schema-tx (into init-schema (mapcat s/schema tables))
           sys-ts (t/record system-table {:name name :timestep 1})]
       (db/add-attributes conn schema-tx)
       (db/transact conn [sys-ts])
@@ -87,42 +105,100 @@
   (when (started? sys)
     (get-in sys [:facts :out])))
 
-(defn run-rule [db tables rule]
-  (let [{:keys [head-form head body]} rule
+(defn lineage [dep-lvars fact]
+  (let [dep-lvar? (apply hash-set dep-lvars)
+        lineage (->> fact
+                     (keep (fn [[k v]]
+                             (when (dep-lvar? k)
+                               v)))
+                     distinct)]
+    lineage))
+
+(defn run-rule [db tables id-map rule]
+  (let [{:keys [head-form head body dep-lvars]} rule
         table (get tables (first head-form))
         defer (:deferred rule)
         channel? (:channel table)
-        lvars (into [] (d/lvars head))]
-    [defer (->> {:find lvars :where body}
+        lvars (into dep-lvars (d/lvars head))
+        q {:find lvars :where body}]
+    [defer (->> q
                 (db/q db)
                 (map (partial zipmap lvars))
+                distinct
                 (map (fn [fact]
-                       (if channel?
-                         (d/bind-form head-form fact)
-                         (t/add-id table (d/bind-form head fact))))))]))
+                       (let [lineage (map (fn [eid]
+                                            (if-let [tempid (get id-map eid)]
+                                              tempid
+                                              eid))
+                                          (lineage dep-lvars fact))]
+                         (if channel?
+                           (let [rel (d/bind-form head-form fact)]
+                             (if (:loopback table)
+                               (with-meta rel {:loopback true
+                                               :lineage #{lineage}})
+                               (with-meta rel {:lineage #{lineage}})))
+                           (with-meta
+                             (t/add-id table (d/bind-form head fact))
+                             {:lineage #{lineage}}))))))]))
+
+(defn depends? [rules rule]
+  (some (partial d/depends-on? rule) rules))
+
+(defn stratify [rules]
+  (let [deps (map (fn [rule]
+                    [rule (depends? rules rule)])
+                  rules)
+        no-deps (map first (remove second deps))
+        has-deps (map first (filter second deps))]
+    (if (empty? has-deps)
+      [rules]
+      (let [strata (stratify has-deps)]
+        (into [no-deps] strata)))))
 
 (defn run-rules!
   ([db sys]
-   (run-rules! db sys #{} #{} 999))
-  ([db sys tx-acc deferred max]
+   (let [rules (rules sys)
+         strata (stratify rules)]
+     (run-rules! db sys #{} #{} 999 strata {})))
+  ([db sys tx-acc deferred max strata id-map]
    (when (pos? max)
-     (let [rules (rules sys)
-           txes (map (partial run-rule db (tables sys)) rules)
-           [tx-data defer] (reduce (fn [[now next] [defer? tx]]
-                                     (if defer?
-                                       [now (into next tx)]
-                                       [(into now tx) next]))
-                                   [[] []]
-                                   txes)
-           tx-acc (into tx-acc tx-data)
-           deferred (into deferred defer)
-           db (db/with db tx-data)
-           tx-data (get-in db [:last-tx :tx-data])]
-       (if (empty? tx-data)
-         [tx-acc deferred]
-         (recur db sys tx-acc deferred (dec max)))))))
+     (if (empty? strata)
+       [tx-acc deferred]
+       (let [rules (first strata)
+             txes (map (partial run-rule db (tables sys) id-map) rules)
+             [tx-data defer] (reduce (fn [[now next] [defer? tx]]
+                                       (if defer?
+                                         [now (into next tx)]
+                                         [(into now tx) next]))
+                                     [[] []]
+                                     txes)
+             tx-meta (into {}
+                           (keep (fn [entity]
+                                   (when (tx-acc entity)
+                                     [entity (meta entity)]))
+                                 tx-data))
+             tx-acc (into #{} (map (fn [entity]
+                                     (if-let [new (tx-meta entity)]
+                                       (let [m (meta entity)
+                                             lineage (:lineage new)
+                                             new-m (update m :lineage into lineage)]
+                                         (with-meta entity new-m))
+                                       entity)))
+                          (into tx-acc tx-data))
+             deferred (into deferred defer)
+             db (db/with db tx-data)
+             last-tx (db/last-tx db)
+             tx-data (:tx-data last-tx)
+             id-map (->> tx-data
+                         (keep (fn [[e a v]]
+                                 (when (= "$id" (name a))
+                                   [e v])))
+                         (into id-map))]
+         (if (empty? tx-data)
+           (recur db sys tx-acc deferred (dec max) (rest strata) id-map)
+           (recur db sys tx-acc deferred (dec max) strata id-map)))))))
 
-(defn clean-scratch! [sys]
+(defn clean-type! [sys type]
   (let [{:keys [conn]} sys
         db (db/db conn)
         tx (mapcat (fn [{:keys [name]}]
@@ -131,8 +207,48 @@
                                  [:db/retract e a v])
                                (db/q db {:find [e v]
                                          :where [[e a v]]}))))
-                      (filter :scratch (vals (tables sys))))]
+                      (filter type (vals (tables sys))))]
     @(db/transact conn tx)))
+
+(defn clean-scratch! [sys]
+  (clean-type! sys :scratch))
+
+(defn clean-channel! [sys]
+  (clean-type! sys :channel))
+
+(defn loopback? [rel]
+  (let [m (meta rel)]
+    (:loopback m)))
+
+(defn apply-lineage [conn tx]
+  (let [tx (map (fn [e]
+                  (assoc e :db/id (db/tempid conn :db.part/user)))
+                tx)
+        get-fid (fn [e]
+                  (first (keep (fn [[k v]]
+                                 (when (= "$id" (name k))
+                                   v))
+                               e)))
+        id-map (->> tx
+                    (map (juxt get-fid :db/id))
+                    (into {}))]
+    (mapcat (fn [fact]
+              (if-let [lineage (-> fact meta :lineage)]
+                (let [lineage-entities (map (fn [lineage]
+                                              (let [id (:db/id fact)
+                                                    lineage (map (fn [id]
+                                                                   (if-let [tempid (id-map id)]
+                                                                     tempid
+                                                                     id))
+                                                                 lineage)
+                                                    lineage-entity {:db/id (db/tempid conn :db.part/user)
+                                                                    :oolon.lineage/child id
+                                                                    :oolon.lineage/parent lineage}]
+                                                lineage-entity))
+                                            lineage)]
+                  (conj lineage-entities fact))
+                [fact]))
+            tx)))
 
 (defn tick! [sys]
   (when (started? sys)
@@ -148,14 +264,52 @@
               timestep (:timestep ts-attrs)
               next-t (t/record system-table {:name name :timestep (inc timestep)})
               [tx-now tx-next] (run-rules! db sys)
-              tx (into [next-t] tx-now)
+              tx (into [next-t] (apply-lineage conn tx-now))
               assertions (->> tx-next
                               (filter map?)
+                              (apply-lineage conn)
                               (into #{}))
               chan-out (->> tx-next
                             (remove map?)
-                            (into #{}))]
+                            (remove loopback?)
+                            (into #{}))
+              assertions (->> tx-next
+                              (remove map?)
+                              (filter loopback?)
+                              (map (partial fact->record sys))
+                              (into assertions))]
           @(db/transact conn tx)
+          (clean-channel! sys)
           (-> sys
               (assoc-in [:facts :assertions] assertions)
               (assoc-in [:facts :out] chan-out)))))))
+
+(defn fact-parents [db child]
+  (let [parents (->> child
+                     (db/q db '[:find ?p
+                                :in $ ?c
+                                :where
+                                [?l :oolon.lineage/child ?c]
+                                [?l :oolon.lineage/parent ?p]])
+                     (map first)
+                     (into #{}))]
+    (when-not (empty? parents)
+      (into parents (mapcat (partial fact-parents db)
+                            parents)))))
+
+(defn entity->fact [db eid]
+  (->> eid
+       (db/pull db '[*])
+       t/entity->fact))
+
+(defn derived-from [sys fact]
+  (let [conn (:conn sys)
+        db (db/db conn)
+        eavt (apply d/rel->eavt fact)
+        id-sym (ffirst eavt)
+        q {:find [id-sym]
+           :where eavt}
+        child (ffirst (db/q db q))
+        parents (fact-parents db child)
+        facts (map (partial entity->fact db) parents)]
+    (apply hash-set facts)))
