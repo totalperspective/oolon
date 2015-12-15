@@ -87,7 +87,9 @@ into an agent.
 
 A module is a collection of
 related state (represented as tables)
-and some rules that define how they change.
+some rules that define how they change
+and other modules that they depend on.
+
 
 ```clojure
 (def my-module
@@ -99,6 +101,12 @@ and some rules that define how they change.
     .
     .
     tableN
+    :import
+    module1
+    module2
+    .
+    .
+    moduleN
     :rules
     rule1
     rule2
@@ -106,6 +114,7 @@ and some rules that define how they change.
     .
     ruleM]))
 ```
+
 ##### Tables
 
 Tables in Oolon are
@@ -145,6 +154,18 @@ These represent communication outside of the agent.
 Incoming facts have the same semantics as
 facts in a scratch table.
 Outgoing facts are placed in an output buffer for dispatch.
+
+*Loopback*
+`(loopback ...)` 
+This is a special channel that
+loop back a message to a module.
+
+*Interfaces*
+`(input ...)`
+`(output ...)` 
+These are scratch tables that allow
+modules to communicate with each other.
+
 
 ##### Rules
 
