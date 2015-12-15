@@ -1,6 +1,10 @@
 (ns oolon.table)
 
-(def opt? #{:scratch :channel})
+(def opt? #{:scratch
+            :channel
+            :loopback
+            :input
+            :output})
 
 (defn table
   ([name keys]
@@ -23,11 +27,29 @@
   ([name keys vals]
    (table name keys vals :scratch)))
 
+(defn input
+  ([name keys]
+   (scratch name keys {}))
+  ([name keys vals]
+   (table name keys vals :scratch :input)))
+
+(defn output
+  ([name keys]
+   (scratch name keys {}))
+  ([name keys vals]
+   (table name keys vals :scratch :output)))
+
 (defn channel
   ([name keys]
    (channel name keys {}))
   ([name keys vals]
    (table name keys vals :scratch :channel)))
+
+(defn loopback
+  ([name keys]
+   (loopback name keys {}))
+  ([name keys vals]
+   (table name keys vals :scratch :channel :loopback)))
 
 (defn record [table row]
   (let [{:keys [name keys]} table
@@ -50,6 +72,18 @@
                           [k (symbol (str "?" (name k)))]))
                    (into {}))]
     [(:name table) attrs]))
+
+(defn entity->fact [entity]
+  (let [table (first (keep (fn [[k v]]
+                             (when (= "$id" (name k))
+                               (namespace k)))
+                           entity))
+        attrs (into {} (keep (fn [[k v]]
+                               (when (and (= table (namespace k))
+                                          (not (= "$id" (name k))))
+                                 [(keyword (name k)) v]))
+                               entity))]
+    [(keyword table) attrs]))
 
 (defn add-id [table record]
   (if table

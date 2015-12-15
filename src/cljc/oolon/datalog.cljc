@@ -78,10 +78,20 @@
 (defn negative [form]
   (filter negation? form))
 
+(defn neg-lvars [form]
+  (->> form
+       negative
+       (mapcat (fn [neg-form]
+                 (let [type (first neg-form)]
+                   (if 'not-join
+                     (second neg-form)
+                     (lvars neg-form)))))
+       (into #{})))
+
 (defn safe? [lhs rhs]
   (let [lhs-lvars (lvars lhs)
         pos-lvars (-> rhs positive lvars)
-        neg-lvars (-> rhs negative lvars)
+        neg-lvars (neg-lvars rhs)
         lhs-diff (clojure.set/difference lhs-lvars pos-lvars)
         neg-diff (clojure.set/difference neg-lvars pos-lvars)]
     (every? empty? [lhs-diff neg-diff])))
@@ -101,19 +111,54 @@
            (into {})))
     (expand-form rel)))
 
-(def default-rule {:insert true})
+(def default-rule {:insert true
+                   :monotone true})
+
+(defn form-atrs [form]
+  (->> form
+       (mapcat (fn [clause]
+                 (filter vector? clause)))
+       (keep (fn [[e a v]]
+               (when (keyword? a)
+                 a)))
+       (remove (fn [attr]
+                 (let [n (name attr)]
+                   (= "$id" n))))
+       (into #{})))
+
+(defn dep-lvars [form]
+  (->> form
+       (mapcat (fn [clause]
+                 (filter vector? clause)))
+       (filter (fn [[e a v]]
+                 (when (and  (symbol? e) (keyword? a))
+                   (let [n (name a)]
+                     (= "$id" n)))))
+       (map first)
+       distinct
+       (into [])))
 
 (defn rule [head-form body]
   (let [head (rel->map head-form)
         body (query* body)
         safe? (safe? head body)
-        neg? (not (empty? (negative body)))]
+        body-neg (negative body)
+        body-pos (positive body)
+        neg? (not (empty? body-neg))
+        neg-attrs (form-atrs body-neg)
+        pos-attrs (form-atrs [body-pos])
+        dep-lvars (dep-lvars [body-pos])
+        head-attrs (apply hash-set (keys head))]
     (-> default-rule
         (assoc :head-form (expand-form head-form))
         (assoc :head head)
         (assoc :body body)
         (assoc :safe? safe?)
-        (assoc :neg? neg?))))
+        (assoc :neg? neg?)
+        (assoc :neg-attrs neg-attrs)
+        (assoc :pos-attrs pos-attrs)
+        (assoc :head-attrs head-attrs)
+        (assoc :dep-lvars dep-lvars))))
 
 (defn rule+ [head-form body]
   (-> (rule head-form body)
@@ -121,4 +166,11 @@
 
 (defn rule> [head-form body]
   (-> (rule+ head-form body)
-      (assoc :async true)))
+      (assoc :async true)
+      (assoc :monotone false)))
+
+(defn depends-on? [dependant dependancy]
+  (let [dependant-attrs (:neg-attrs dependant)
+        dependancy-attrs (:head-attrs dependancy)
+        intersection (clojure.set/intersection dependant-attrs dependancy-attrs)]
+    (not (empty? intersection))))
