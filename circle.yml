@@ -1,5 +1,5 @@
 dependencies:
   post:
     - mkdir checkouts
-    - cd checkouts
-    - git clone https://github.com/tonsky/datascript.git
+    - cd checkouts; git clone https://github.com/tonsky/datascript.git
+
