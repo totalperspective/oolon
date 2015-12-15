@@ -138,3 +138,50 @@ the body of the clause"
         ?body                 ?safe
         '[(not [?q])]         false
         '[[?q] (not [?q])]    true))
+
+(facts "About rules"
+       (let [link-path (rule [:path {:src :?src :dst :?dst}]
+                             [[:link {:src :?src :dst :?dst}]])
+             path-path (rule [:path {:src :?src :dst :?dst}]
+                             [[:link {:src :?src :dst :?via}]
+                              [:path {:src :?via :dst :?dst}]])
+             everyone-likes (rule [:everyone-likes {:name :?x}]
+                                  [[:person {:name :?x}]
+                                   '(not-join [?x]
+                                              [:is-not-liked {:name :?x}])])
+             is-not-liked (rule [:is-not-liked {:name :?y}]
+                                [[:person#x {:name :?x}]
+                                 [:person#y {:name :?y}]
+                                 '(not-join [?x ?y]
+                                            [:likes {:person :?x :likes :?y}])])]
+         (fact "We can ennumerate the positive attrs in the head of each rule"
+               (:head-attrs link-path) => #{:path/src :path/dst}
+               (:head-attrs path-path) => #{:path/src :path/dst}
+               (:head-attrs everyone-likes) => #{:everyone-likes/name}
+               (:head-attrs is-not-liked) => #{:is-not-liked/name})
+         (fact "We can ennumerate the positive attrs a dule depends on"
+               (:pos-attrs link-path) => #{:link/src :link/dst}
+               (:pos-attrs path-path) => #{:link/src :link/dst :path/src :path/dst}
+               (:pos-attrs everyone-likes) => #{:person/name}
+               (:pos-attrs is-not-liked) => #{:person/name})
+         (facts "About safety"
+                (:safe? link-path) => true
+                (:safe? path-path) => true
+                (:safe? everyone-likes) => true
+                (:safe? is-not-liked) => true)
+         (facts "About negation"
+                (fact "Rules with a not are negative"
+                      (:neg? link-path) => false
+                      (:neg? path-path) => false
+                      (:neg? everyone-likes) => true
+                      (:neg? is-not-liked) => true)
+                (fact "Negative rules have dependant attributes"
+                      (:neg-attrs link-path) => #{}
+                      (:neg-attrs path-path) => #{}
+                      (:neg-attrs everyone-likes) => #{:is-not-liked/name}
+                      (:neg-attrs is-not-liked) => #{:likes/person :likes/likes}))
+         (facts "About dependence"
+                (depends-on? link-path path-path) => false
+                (depends-on? path-path link-path) => false
+                (depends-on? is-not-liked everyone-likes) => false
+                (depends-on? everyone-likes is-not-liked) => true)))

@@ -112,8 +112,19 @@
                              rel))
                          (t/add-id table (d/bind-form head fact))))))]))
 
+(defn depends? [rules rule]
+  (some (partial d/depends-on? rule) rules))
+
 (defn stratify [rules]
-  (map vector (concat rules rules)))
+  (let [deps (map (fn [rule]
+                    [rule (depends? rules rule)])
+                  rules)
+        no-deps (map first (remove second deps))
+        has-deps (map first (filter second deps))]
+    (if (empty? has-deps)
+      [rules]
+      (let [strata (stratify has-deps)]
+        (into [no-deps] strata)))))
 
 (defn run-rules!
   ([db sys]
