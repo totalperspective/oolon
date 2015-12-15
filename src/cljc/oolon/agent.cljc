@@ -99,8 +99,9 @@
         table (get tables (first head-form))
         defer (:deferred rule)
         channel? (:channel table)
-        lvars (into [] (d/lvars head))]
-    [defer (->> {:find lvars :where body}
+        lvars (into [] (d/lvars head))
+        q {:find lvars :where body}]
+    [defer (->> q
                 (db/q db)
                 (map (partial zipmap lvars))
                 (map (fn [fact]
@@ -111,26 +112,44 @@
                              rel))
                          (t/add-id table (d/bind-form head fact))))))]))
 
+(defn depends? [rules rule]
+  (some (partial d/depends-on? rule) rules))
+
+(defn stratify [rules]
+  (let [deps (map (fn [rule]
+                    [rule (depends? rules rule)])
+                  rules)
+        no-deps (map first (remove second deps))
+        has-deps (map first (filter second deps))]
+    (if (empty? has-deps)
+      [rules]
+      (let [strata (stratify has-deps)]
+        (into [no-deps] strata)))))
+
 (defn run-rules!
   ([db sys]
-   (run-rules! db sys #{} #{} 999))
-  ([db sys tx-acc deferred max]
+   (let [rules (rules sys)
+         strata (stratify rules)]
+     (run-rules! db sys #{} #{} 999 strata)))
+  ([db sys tx-acc deferred max strata]
    (when (pos? max)
-     (let [rules (rules sys)
-           txes (map (partial run-rule db (tables sys)) rules)
-           [tx-data defer] (reduce (fn [[now next] [defer? tx]]
-                                     (if defer?
-                                       [now (into next tx)]
-                                       [(into now tx) next]))
-                                   [[] []]
-                                   txes)
-           tx-acc (into tx-acc tx-data)
-           deferred (into deferred defer)
-           db (db/with db tx-data)
-           tx-data (get-in db [:last-tx :tx-data])]
-       (if (empty? tx-data)
-         [tx-acc deferred]
-         (recur db sys tx-acc deferred (dec max)))))))
+     (if (empty? strata)
+       [tx-acc deferred]
+       (let [rules (first strata)
+             txes (map (partial run-rule db (tables sys)) rules)
+             [tx-data defer] (reduce (fn [[now next] [defer? tx]]
+                                       (if defer?
+                                         [now (into next tx)]
+                                         [(into now tx) next]))
+                                     [[] []]
+                                     txes)
+             tx-acc (into tx-acc tx-data)
+             deferred (into deferred defer)
+             db (db/with db tx-data)
+             tx-data (get-in db [:last-tx :tx-data])]
+         (if (empty? tx-data)
+           (recur db sys tx-acc deferred (dec max) (rest strata))
+           (recur db sys tx-acc deferred (dec max) strata)))))))
 
 (defn clean-type! [sys type]
   (let [{:keys [conn]} sys

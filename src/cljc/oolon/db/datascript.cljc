@@ -1,6 +1,7 @@
 (ns oolon.db.datascript
   (:require [datascript.core :as d]
             [datascript.db :as ddb]
+            [datascript.query-v3 :as q]
             [oolon.db :as db]))
 
 (def init-schema {:db/ident {:db/unique :db.unique/identity}
@@ -35,7 +36,7 @@
 (defrecord Db [db last-tx]
   db/Db
   (-query [_ {:keys [query args]}]
-    (apply d/q query db args))
+    (apply q/q query db args))
   (-with [_ tx-data]
     (let [last-tx (d/with db tx-data)]
       (->Db (:db-after last-tx) last-tx)))
