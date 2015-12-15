@@ -37,9 +37,13 @@
   db/Db
   (-query [_ {:keys [query args]}]
     (apply q/q query db args))
+  (-pull [_ pattern eid]
+    (d/pull db pattern eid))
   (-with [_ tx-data]
     (let [last-tx (d/with db tx-data)]
       (->Db (:db-after last-tx) last-tx)))
+  (-last-tx [_]
+    last-tx)
   (-resolve-tempid [_ tempids tempid]
     (d/resolve-tempid db tempids tempid))
   db/HasDb

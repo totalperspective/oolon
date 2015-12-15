@@ -365,3 +365,72 @@
                   [:is-not-liked {:name :b}]
                   [:person {:name :a}]
                   [:agent {:name :test :timestep 2}])))))
+
+(def link-module
+  (m/module
+   :link
+   [:state
+    (t/table :link {:src :long :dst :long})
+    (t/table :path {:src :long :dst :long})
+    :rules
+    (d/rule [:path {:src :?src :dst :?dst}]
+            [[:link {:src :?src :dst :?dst}]])
+    (d/rule [:path {:src :?src :dst :?dst}]
+            [[:path {:src :?src :dst :?via}]
+             [:link {:src :?via :dst :?dst}]])]))
+
+(def link-data
+  [[:link {:src 1 :dst 2}]
+   [:link {:src 2 :dst 3}]
+   [:link {:src 3 :dst 4}]
+   [:link {:src 2 :dst 5}]
+   [:link {:src 5 :dst 4}]])
+
+(facts "About lineage"
+       (let [conn (ds/create-conn {})
+             agnt  (-> :test
+                       (agent conn [link-module])
+                       start!
+                       (add-data link-data)
+                       tick!)]
+         (fact "Everyone all the paths are found"
+               (let [s (state agnt)]
+                 (count s) => 15
+                 (tabular
+                  (fact "We have all the facts we expect"
+                        (s ?fact) => ?fact)
+                  ?fact
+                  [:link {:src 1 :dst 2}]
+                  [:link {:src 2 :dst 3}]
+                  [:link {:src 3 :dst 4}]
+                  [:link {:src 2 :dst 5}]
+                  [:link {:src 5 :dst 4}]
+                  ;; order 1 paths
+                  [:path {:src 1 :dst 2}]
+                  [:path {:src 2 :dst 3}]
+                  [:path {:src 3 :dst 4}]
+                  [:path {:src 2 :dst 5}]
+                  [:path {:src 5 :dst 4}]
+                  ;; order 2 paths
+                  [:path {:src 1 :dst 3}]
+                  [:path {:src 1 :dst 5}]
+                  [:path {:src 2 :dst 4}]
+                  ;; order 3 paths
+                  [:path {:src 1 :dst 3}]
+                  ;; ts
+                  [:agent {:name :test :timestep 2}])))
+         (fact "We know how a fact was derived"
+               (let [drv (derived-from agnt [:path {:src 2 :dst 4}])]
+                 (count drv) => 6
+                 (tabular
+                  (fact "We have all the facts we expect"
+                        (drv ?fact) => ?fact)
+                  ?fact
+                  ;; 1st proof
+                  [:link {:src 2 :dst 3}]
+                  [:path {:src 2 :dst 3}]
+                  [:link {:src 3 :dst 4}]
+                  ;; 2nd proof
+                  [:link {:src 2 :dst 5}]
+                  [:path {:src 2 :dst 5}]
+                  [:link {:src 5 :dst 4}])))))

@@ -73,6 +73,18 @@
                    (into {}))]
     [(:name table) attrs]))
 
+(defn entity->fact [entity]
+  (let [table (first (keep (fn [[k v]]
+                             (when (= "$id" (name k))
+                               (namespace k)))
+                           entity))
+        attrs (into {} (keep (fn [[k v]]
+                               (when (and (= table (namespace k))
+                                          (not (= "$id" (name k))))
+                                 [(keyword (name k)) v]))
+                               entity))]
+    [(keyword table) attrs]))
+
 (defn add-id [table record]
   (if table
     (let [{:keys [name keys]} table
