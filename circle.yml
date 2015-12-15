@@ -1,0 +1,5 @@
+dependencies:
+  pre:
+    - mkdir checkouts
+    - cd checkouts
+    - git clone https://github.com/tonsky/datascript.git
