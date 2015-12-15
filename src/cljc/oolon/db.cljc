@@ -16,7 +16,9 @@ inclusive, are reserved for user-created tempids.")
 
 (defprotocol Db
   (-query [db query-map] "Executes a query against inputs.")
+  (-pull [db pattern eid] "Returns a hierarchical selection of attributes for eid.")
   (-with [db tx-data] "Applies tx-data to the database.")
+  (-last-tx [db] "Returns the last tx-report")
   (-resolve-tempid [db tempids tempid] "Resolve a tempid to the actual
 id assigned in a database. The tempids object must come from
 the :tempids member returned through transact or with"))
@@ -70,6 +72,10 @@ the :tempids member returned through transact or with"))
   (query db {:query q
              :args inputs}))
 
+(def pull (db-fn -pull))
+
 (def with (db-fn -with))
+
+(def last-tx (db-fn -last-tx))
 
 (def resolve-tempid (db-fn -resolve-tempid))
