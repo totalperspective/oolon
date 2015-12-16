@@ -171,6 +171,12 @@
       (assoc :retract true)
       (assoc :deferred true)))
 
+(defn rule+- [head-form body]
+  (-> (rule head-form body)
+      (assoc :monotone false)
+      (assoc :retract true)
+      (assoc :deferred true)))
+
 (defn rule> [head-form body]
   (-> (rule+ head-form body)
       (assoc :async true)

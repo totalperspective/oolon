@@ -29,6 +29,10 @@
 
 (def rule+ d/rule+)
 
+(def rule- d/rule-)
+
+(def rule+- d/rule+-)
+
 (def rule> d/rule>)
 
 ;; Agents

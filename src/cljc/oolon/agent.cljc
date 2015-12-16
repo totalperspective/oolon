@@ -303,9 +303,9 @@
     (let [{:keys [facts name conn]} sys
           sys (assoc sys :facts empty-facts)
           {:keys [assertions retractions]} facts
-          init-tx (into (retract-tx (db/db conn) retractions)
-                        (seq assertions))
-          {:keys [tx-data db-after]} @(db/transact conn init-tx)]
+          retract-tx (retract-tx (db/db conn) retractions)
+          {:keys [tx-data]} @(db/transact conn retract-tx)
+          tx-data (into tx-data (:tx-data @(db/transact conn (seq assertions))))]
       (if (empty? tx-data)
         sys
         (let [db (db/db conn)
