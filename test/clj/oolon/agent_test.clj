@@ -416,9 +416,10 @@
                   [:path {:src 1 :dst 5}]
                   [:path {:src 2 :dst 4}]
                   ;; order 3 paths
-                  [:path {:src 1 :dst 3}]
+                  [:path {:src 1 :dst 4}]
                   ;; ts
                   [:agent {:name :test :timestep 2}])))
+
          (fact "We know how a fact was derived"
                (let [drv (derived-from agnt [:path {:src 2 :dst 4}])]
                  (count drv) => 6
@@ -434,3 +435,69 @@
                   [:link {:src 2 :dst 5}]
                   [:path {:src 2 :dst 5}]
                   [:link {:src 5 :dst 4}])))))
+
+(facts "About retractions"
+       (let [conn (ds/create-conn {})
+             agnt  (-> :test
+                       (agent conn [link-module])
+                       start!
+                       (add-data link-data)
+                       tick!
+                       (-fact [:link {:src 3 :dst 4}])
+                       tick!)]
+         (fact "All the paths are found"
+               (let [s (state agnt)]
+                 (count s) => 13
+                 (tabular
+                  (fact "We have all the facts we expect"
+                        (s ?fact) => ?fact)
+                  ?fact
+                  [:link {:src 1 :dst 2}]
+                  [:link {:src 2 :dst 3}]
+                  [:link {:src 2 :dst 5}]
+                  [:link {:src 5 :dst 4}]
+                  ;; order 1 paths
+                  [:path {:src 1 :dst 2}]
+                  [:path {:src 2 :dst 3}]
+                  [:path {:src 2 :dst 5}]
+                  [:path {:src 5 :dst 4}]
+                  ;; order 2 paths
+                  [:path {:src 1 :dst 3}]
+                  [:path {:src 1 :dst 5}]
+                  [:path {:src 2 :dst 4}]
+                  ;; order 3 paths
+                  [:path {:src 1 :dst 4}]
+                  ;; ts
+                  [:agent {:name :test :timestep 3}])))
+         (fact "We now only have 1 derivation"
+               (let [drv (derived-from agnt [:path {:src 2 :dst 4}])]
+                 (count drv) => 3
+                 (tabular
+                  (fact "We have all the facts we expect"
+                        (drv ?fact) => ?fact)
+                  ?fact
+                  [:link {:src 2 :dst 5}]
+                  [:path {:src 2 :dst 5}]
+                  [:link {:src 5 :dst 4}])))
+         (facts "About removing the other dependancy"
+                (let [agnt2 (-> agnt
+                                (-fact [:link {:src 2 :dst 5}])
+                                tick!)]
+                  (fact "The derived paths are removed"
+                        (let [s (state agnt2)]
+                          (count s) => 8
+                          (tabular
+                           (fact "We have all the facts we expect"
+                                 (s ?fact) => ?fact)
+                           ?fact
+                           [:link {:src 1 :dst 2}]
+                           [:link {:src 2 :dst 3}]
+                           [:link {:src 5 :dst 4}]
+                           ;; order 1 paths
+                           [:path {:src 1 :dst 2}]
+                           [:path {:src 2 :dst 3}]
+                           [:path {:src 5 :dst 4}]
+                           ;; order 2 paths
+                           [:path {:src 1 :dst 3}]
+                           ;; ts
+                           [:agent {:name :test :timestep 4}])))))))
