@@ -40,18 +40,18 @@
 (def loop-recv
   (t/scratch :loop-recv {:msg :keyword}))
 
-(def module-tables {:agent system-table
-                    :sym sym-table
-                    :perm perm-table
-                    :add-sym add-sym-table
-                    :sym-added sym-added-table
-                    :send send-table
-                    :recv recv-table
-                    :chan-in chan-in
-                    :chan-out chan-out
-                    :loop-send loop-send
-                    :loop loop-chan
-                    :loop-recv loop-recv})
+(def module-tables (into internal-tables
+                         {:sym sym-table
+                          :perm perm-table
+                          :add-sym add-sym-table
+                          :sym-added sym-added-table
+                          :send send-table
+                          :recv recv-table
+                          :chan-in chan-in
+                          :chan-out chan-out
+                          :loop-send loop-send
+                          :loop loop-chan
+                          :loop-recv loop-recv}))
 
 (def module
   (m/module
@@ -103,30 +103,31 @@
 
 (facts "About a started system"
        (let [conn (ds/create-conn {})
-             sys (start! (agent :test conn [module]))]
+             agnt (start! (agent :test conn [module]))]
          (fact "The system is started"
-               (started? sys) => true)
+               (started? agnt) => true)
          (fact "Starting twice is a noop"
-               (start! sys) => sys)
+               (start! agnt) => agnt)
          (fact "The state contains only the initial timestep"
-               (state sys) => #{[:agent {:name :test :timestep 1}]})
+               (state agnt) => #{[:agent {:name :test :timestep 1}]})
          (fact "Running the system is a noop"
-               (tick! sys) => sys)))
+               (tick! agnt) => agnt)))
 
 (facts "About asserting a fact that triggers no rules"
        (let [conn (ds/create-conn {})
-             sys  (-> :test
+             agnt  (-> :test
                       (agent conn [module])
                       start!
                       (+fact [:perm {:x :a :y :b}]))]
          (fact "Before we run nothing has changed"
-               (state sys) => #{[:agent {:name :test :timestep 1}]})
-         (fact "Running the system moves to the next timestep and adds the fact"
-               (state (tick! sys)) => #{[:agent {:name :test :timestep 2}]
-                                        [:perm {:x :a :y :b}]})
-         (fact "Running again does nothing"
-               (state (tick! sys)) => #{[:agent {:name :test :timestep 2}]
-                                        [:perm {:x :a :y :b}]})))
+               (state agnt) => #{[:agent {:name :test :timestep 1}]})
+         (let [agnt (tick! agnt)]
+           (fact "Running the system moves to the next timestep and adds the fact"
+                 (state agnt) => #{[:agent {:name :test :timestep 2}]
+                                   [:perm {:x :a :y :b}]})
+           (fact "Running again does nothing"
+                 (state (tick! agnt)) => #{[:agent {:name :test :timestep 2}]
+                                           [:perm {:x :a :y :b}]}))))
 
 (facts "About asserting a facts that trigger rules"
        (let [conn (ds/create-conn {})
@@ -244,14 +245,18 @@
                   [:agent {:name :test :timestep 2}])
                  (fact "We also have the msg in the out buffer"
                        (out sys) => #{[:chan-out {:msg :foo}]})))
-         (fact "Running again does nothing but the scratch table is empty"
-               (let [s (state (tick! sys))]
-                 (count s) => 1
-                 (tabular
-                  (fact "We have all the facts we expect"
-                        (s ?fact) => ?fact)
-                  ?fact
-                  [:agent {:name :test :timestep 2}])))))
+         (let [sys (tick! sys)]
+           (fact "Running again empties the scratch table and move the timestep"
+                 (let [s (state sys)]
+                   (count s) => 1
+                   (tabular
+                    (fact "We have all the facts we expect"
+                          (s ?fact) => ?fact)
+                    ?fact
+                    [:agent {:name :test :timestep 3}])))
+           (let [sys (tick! sys)]
+             (fact "Nothing happens"
+                   (state sys) => #{[:agent {:name :test :timestep 3}]})))))
 
 (facts "About loopback channels"
        (let [conn (ds/create-conn {})
@@ -372,12 +377,15 @@
    [:state
     (t/table :link {:src :long :dst :long})
     (t/table :path {:src :long :dst :long})
+    (t/input :drop-link {:src :long :dst :long})
     :rules
     (d/rule [:path {:src :?src :dst :?dst}]
             [[:link {:src :?src :dst :?dst}]])
     (d/rule [:path {:src :?src :dst :?dst}]
             [[:path {:src :?src :dst :?via}]
-             [:link {:src :?via :dst :?dst}]])]))
+             [:link {:src :?via :dst :?dst}]])
+    (d/rule- [:link {:src :?src :dst :?dst}]
+             [[:drop-link {:src :?src :dst :?dst}]])]))
 
 (def link-data
   [[:link {:src 1 :dst 2}]
@@ -416,9 +424,10 @@
                   [:path {:src 1 :dst 5}]
                   [:path {:src 2 :dst 4}]
                   ;; order 3 paths
-                  [:path {:src 1 :dst 3}]
+                  [:path {:src 1 :dst 4}]
                   ;; ts
                   [:agent {:name :test :timestep 2}])))
+
          (fact "We know how a fact was derived"
                (let [drv (derived-from agnt [:path {:src 2 :dst 4}])]
                  (count drv) => 6
@@ -434,3 +443,201 @@
                   [:link {:src 2 :dst 5}]
                   [:path {:src 2 :dst 5}]
                   [:link {:src 5 :dst 4}])))))
+
+(facts "About retractions"
+       (let [conn (ds/create-conn {})
+             agnt  (-> :test
+                       (agent conn [link-module])
+                       start!
+                       (add-data link-data)
+                       tick!
+                       (-fact [:link {:src 3 :dst 4}])
+                       tick!)]
+         (fact "All the paths are found"
+               (let [s (state agnt)]
+                 (count s) => 13
+                 (tabular
+                  (fact "We have all the facts we expect"
+                        (s ?fact) => ?fact)
+                  ?fact
+                  [:link {:src 1 :dst 2}]
+                  [:link {:src 2 :dst 3}]
+                  [:link {:src 2 :dst 5}]
+                  [:link {:src 5 :dst 4}]
+                  ;; order 1 paths
+                  [:path {:src 1 :dst 2}]
+                  [:path {:src 2 :dst 3}]
+                  [:path {:src 2 :dst 5}]
+                  [:path {:src 5 :dst 4}]
+                  ;; order 2 paths
+                  [:path {:src 1 :dst 3}]
+                  [:path {:src 1 :dst 5}]
+                  [:path {:src 2 :dst 4}]
+                  ;; order 3 paths
+                  [:path {:src 1 :dst 4}]
+                  ;; ts
+                  [:agent {:name :test :timestep 3}])))
+         (fact "We now only have 1 derivation"
+               (let [drv (derived-from agnt [:path {:src 2 :dst 4}])]
+                 (count drv) => 3
+                 (tabular
+                  (fact "We have all the facts we expect"
+                        (drv ?fact) => ?fact)
+                  ?fact
+                  [:link {:src 2 :dst 5}]
+                  [:path {:src 2 :dst 5}]
+                  [:link {:src 5 :dst 4}])))
+         (facts "About removing the other dependancy"
+                (let [agnt2 (-> agnt
+                                (-fact [:link {:src 2 :dst 5}])
+                                tick!)]
+                  (fact "The derived paths are removed"
+                        (let [s (state agnt2)]
+                          (count s) => 8
+                          (tabular
+                           (fact "We have all the facts we expect"
+                                 (s ?fact) => ?fact)
+                           ?fact
+                           [:link {:src 1 :dst 2}]
+                           [:link {:src 2 :dst 3}]
+                           [:link {:src 5 :dst 4}]
+                           ;; order 1 paths
+                           [:path {:src 1 :dst 2}]
+                           [:path {:src 2 :dst 3}]
+                           [:path {:src 5 :dst 4}]
+                           ;; order 2 paths
+                           [:path {:src 1 :dst 3}]
+                           ;; ts
+                           [:agent {:name :test :timestep 4}])))))))
+(facts "About retraction rules"
+       (let [conn (ds/create-conn {})
+             agnt  (-> :test
+                       (agent conn [link-module])
+                       start!
+                       (add-data link-data)
+                       tick!
+                       (+fact [:drop-link {:src 3 :dst 4}])
+                       tick!
+                       tick!)]
+         (fact "All the paths are found"
+               (let [s (state agnt)]
+                 (count s) => 13
+                 (tabular
+                  (fact "We have all the facts we expect"
+                        (s ?fact) => ?fact)
+                  ?fact
+                  [:link {:src 1 :dst 2}]
+                  [:link {:src 2 :dst 3}]
+                  [:link {:src 2 :dst 5}]
+                  [:link {:src 5 :dst 4}]
+                  ;; order 1 paths
+                  [:path {:src 1 :dst 2}]
+                  [:path {:src 2 :dst 3}]
+                  [:path {:src 2 :dst 5}]
+                  [:path {:src 5 :dst 4}]
+                  ;; order 2 paths
+                  [:path {:src 1 :dst 3}]
+                  [:path {:src 1 :dst 5}]
+                  [:path {:src 2 :dst 4}]
+                  ;; order 3 paths
+                  [:path {:src 1 :dst 4}]
+                  ;; ts
+                  [:agent {:name :test :timestep 4}])))
+         (fact "We now only have 1 derivation"
+               (let [drv (derived-from agnt [:path {:src 2 :dst 4}])]
+                 (count drv) => 3
+                 (tabular
+                  (fact "We have all the facts we expect"
+                        (drv ?fact) => ?fact)
+                  ?fact
+                  [:link {:src 2 :dst 5}]
+                  [:path {:src 2 :dst 5}]
+                  [:link {:src 5 :dst 4}])))))
+
+(def upsert-module
+  (m/module
+   :upsert
+   [:state
+    (t/table :test {:key :keyword} {:val :long})
+    (t/input :upsert {:key :keyword :val :long})
+    :rules
+    (d/rule+- [:test {:key :?key :val :?val}]
+              [[:upsert {:key :?key :val :?val}]])]))
+
+(facts "About upserts"
+       (let [conn (ds/create-conn {})
+             agnt  (-> :test
+                       (agent conn [upsert-module])
+                       start!
+                       (+fact [:test {:key :foo :val 1}])
+                       tick!)]
+         (fact "The initial state has the original value"
+               (state agnt) => (contains #{[:test {:key :foo :val 1}]}))
+         (let [agnt (-> agnt
+                        (+fact [:upsert {:key :foo :val 2}])
+                        tick!
+                        tick!)]
+           (fact "The after upserting we get a new value"
+                 (state agnt) => (contains #{[:test {:key :foo :val 2}]}))
+           (fact "The after upserting no longet have our old value"
+                 (state agnt) =not=> (contains #{[:test {:key :foo :val 1}]})))))
+
+(def halt-module
+  (m/module
+   :halter
+   [:state
+    (t/table :fact {:key :keyword} {:val :boolean})]))
+
+(facts "About halting"
+       (let [conn (ds/create-conn {})
+             agnt  (-> :test
+                       (agent conn [halt-module])
+                       start!
+                       (+fact [:fact {:key :foo :val true}])
+                       tick!
+                       (+fact [:halt {:kill true}])
+                       tick!
+                       (+-fact [:fact {:key :foo :val false}])
+                       tick!)
+             s (state agnt)]
+         (fact "The initial state has the original value and the timestep did not move"
+               (count s) => 3
+               (tabular
+                (fact "We have all the facts we expect"
+                      (s ?fact) => ?fact)
+                ?fact
+                [:halt {:kill true}]
+                [:fact {:key :foo :val true}]
+                [:agent {:name :test :timestep 3}]))))
+
+(def clock-module
+  (m/module
+   :clock
+   [:state
+    (t/input :tick {:id :keyword})
+    (t/channel :time {:id :keyword} {:time :instant})
+    :rules
+    (d/rule> [:time {:id :?id :time :?t}]
+             [[:tick {:id :?id}]
+              [:clock {:now :?t}]])]))
+
+(facts "About the cock"
+       (let [conn (ds/create-conn {})
+             agnt  (-> :test
+                       (agent conn [clock-module])
+                       start!
+                       (+fact [:tick {:id :foo}])
+                       tick!)
+             s (state agnt)
+             time (first (out agnt))]
+         (fact "We see the input tick and the timestep move"
+               (count s) => 2
+               (tabular
+                (fact "We have all the facts we expect"
+                      (s ?fact) => ?fact)
+                ?fact
+                [:tick {:id :foo}]
+                [:agent {:name :test :timestep 2}]))
+         (fact "we have the time"
+               time => (just [:time (contains {:id :foo :time anything})])
+               (class (:time (second time))) => java.util.Date)))

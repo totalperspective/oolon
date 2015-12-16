@@ -67,7 +67,7 @@ lein install
 #### Leiningen
 
 ```clojure
-:require [[totalperspective/oolon "0.2.0"]
+:require [[totalperspective/oolon "0.3.0"]
           [datascript "0.13.3"]]
 ```
 
@@ -166,6 +166,12 @@ loop back a message to a module.
 These are scratch tables that allow
 modules to communicate with each other.
 
+*Halt*
+Halt is an internal table
+which can be used to stop the execution of a module.
+To do this assert the fact `[:halt {:kill true}]`.
+The agent will stop exeution
+on the next tick.
 
 ##### Rules
 
@@ -234,6 +240,26 @@ When these rules fire
 the resulting facts are added
 to the target table
 at the start of the next timestep.
+
+**Deferred Delete**
+`(rule- ...)` 
+When these rules fire
+the resulting facts are removed
+from the target table
+at the start of the next timestep.
+Additionally,
+any facts derived from these facts
+are also removed.
+
+**Deferred Update (Upsert)**
+`(rule+- ...)` 
+Performs an update of a fact,
+equivalent to:
+
+```clojure
+(rule- ...)
+(rule+ ...)
+```
 
 **Asynchonous**
 `(rule> ...)`  
