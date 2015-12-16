@@ -166,6 +166,12 @@ loop back a message to a module.
 These are scratch tables that allow
 modules to communicate with each other.
 
+*Halt*
+Halt is an internal table
+which can be used to stop the execution of a module.
+To do this assert the fact `[:halt {:kill true}]`.
+The agent will stop exeution
+on the next tick.
 
 ##### Rules
 
