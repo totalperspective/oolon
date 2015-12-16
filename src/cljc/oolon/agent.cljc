@@ -83,13 +83,20 @@
       (when rec
         (update-in sys [:facts :assertions] conj rec)))))
 
+(defn -fact [sys fact]
+  (when (started? sys)
+    (let [rec (fact->record sys fact)]
+      (when rec
+        (update-in sys [:facts :retractions] conj rec)))))
+
 (defn table->facts [sys table]
   (let [{:keys [conn modules name]} sys
         db (db/db conn)
         rel (t/rel table)
         eavt (apply d/rel->eavt rel)
-        lvars (into [] (d/lvars eavt))]
-    (->> {:find lvars :where eavt}
+        lvars (into [] (d/lvars eavt))
+        q {:find lvars :where eavt}]
+    (->> q
          (db/q db)
          (map (partial zipmap lvars))
          (map (partial d/bind-form rel)))))
@@ -250,13 +257,46 @@
                 [fact]))
             tx)))
 
+(defn retract->tx [e]
+  (first (keep (fn [[k v]]
+                 (when (= "$id" (name k))
+                   [:db/retract [k v] k v]))
+               e)))
+
+(defn retract-tx [db retractions]
+  (if (empty? retractions)
+    []
+    (loop [db db
+           retractions retractions
+           tx (keep retract->tx retractions)]
+      (let [next-db (db/with db tx)
+            {:keys [tx-data]} (db/last-tx next-db)
+            eids (map first tx-data)]
+        (if (empty? eids)
+          (keep retract->tx retractions)
+          (let [next-eids (db/q next-db
+                                '[:find ?c
+                                  :in $ [?p ...]
+                                  :where
+                                  [?l :oolon.lineage/parent ?p]
+                                  [?l :oolon.lineage/child ?c]]
+                                eids)
+                next-facts (map (fn [[eid]]
+                                  (db/pull next-db '[*] eid))
+                                next-eids)
+                tx (keep retract->tx next-facts)
+                retractions (into retractions next-facts)]
+            (recur next-db retractions tx)))))))
+
 (defn tick! [sys]
   (when (started? sys)
     (clean-scratch! sys)
     (let [{:keys [facts name conn]} sys
-          {:keys [assertions]} facts
-          {:keys [tx-data]} @(db/transact conn (seq assertions))
-          sys (assoc sys :facts empty-facts)]
+          sys (assoc sys :facts empty-facts)
+          {:keys [assertions retractions]} facts
+          init-tx (into (retract-tx (db/db conn) retractions)
+                        (seq assertions))
+          {:keys [tx-data db-after]} @(db/transact conn init-tx)]
       (if (empty? tx-data)
         sys
         (let [db (db/db conn)
