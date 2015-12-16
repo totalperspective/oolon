@@ -51,19 +51,9 @@
   ([name keys vals]
    (table name keys vals :scratch :channel :loopback)))
 
-(defn record [table row]
-  (let [{:keys [name keys]} table
-        name (clojure.core/name name)
-        keys (clojure.core/keys keys)
-        key (select-keys row keys)
-        id-name (keyword name "$id")
-        id (hash key)]
-    (->> row
-         (map (fn [[k v]]
-                (let [key-name (keyword name
-                                        (clojure.core/name k))]
-                  [key-name v])))
-         (into {id-name id}))))
+(defn hash-fn [key]
+  (let [hash-val (hash (into {} key))]
+    hash-val))
 
 (defn rel [table]
   (let [{:keys [keys vals]} table
@@ -94,6 +84,17 @@
                     (clojure.core/keys keys))
           key (select-keys record keys)
           id-name (keyword name "$id")
-          id (hash key)]
+          id (hash-fn key)]
       (assoc record id-name id))
     record))
+
+(defn record [table row]
+  (let [{:keys [name keys]} table
+        name (clojure.core/name name)]
+    (->> row
+         (map (fn [[k v]]
+                (let [key-name (keyword name
+                                        (clojure.core/name k))]
+                  [key-name v])))
+         (into {})
+         (add-id table))))

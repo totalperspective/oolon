@@ -111,7 +111,7 @@
            (into {})))
     (expand-form rel)))
 
-(def default-rule {:insert true
+(def default-rule {:assert true
                    :monotone true})
 
 (defn form-atrs [form]
@@ -162,6 +162,13 @@
 
 (defn rule+ [head-form body]
   (-> (rule head-form body)
+      (assoc :deferred true)))
+
+(defn rule- [head-form body]
+  (-> (rule head-form body)
+      (dissoc :assert)
+      (assoc :monotone false)
+      (assoc :retract true)
       (assoc :deferred true)))
 
 (defn rule> [head-form body]
