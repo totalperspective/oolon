@@ -40,18 +40,18 @@
 (def loop-recv
   (t/scratch :loop-recv {:msg :keyword}))
 
-(def module-tables {:agent system-table
-                    :sym sym-table
-                    :perm perm-table
-                    :add-sym add-sym-table
-                    :sym-added sym-added-table
-                    :send send-table
-                    :recv recv-table
-                    :chan-in chan-in
-                    :chan-out chan-out
-                    :loop-send loop-send
-                    :loop loop-chan
-                    :loop-recv loop-recv})
+(def module-tables (into internal-tables
+                         {:sym sym-table
+                          :perm perm-table
+                          :add-sym add-sym-table
+                          :sym-added sym-added-table
+                          :send send-table
+                          :recv recv-table
+                          :chan-in chan-in
+                          :chan-out chan-out
+                          :loop-send loop-send
+                          :loop loop-chan
+                          :loop-recv loop-recv}))
 
 (def module
   (m/module
@@ -576,3 +576,31 @@
                  (state agnt) => (contains #{[:test {:key :foo :val 2}]}))
            (fact "The after upserting no longet have our old value"
                  (state agnt) =not=> (contains #{[:test {:key :foo :val 1}]})))))
+
+(def halt-module
+  (m/module
+   :halter
+   [:state
+    (t/table :fact {:key :keyword} {:val :boolean})]))
+
+(facts "About halting"
+       (let [conn (ds/create-conn {})
+             agnt  (-> :test
+                       (agent conn [halt-module])
+                       start!
+                       (+fact [:fact {:key :foo :val true}])
+                       tick!
+                       (+fact [:halt {:kill true}])
+                       tick!
+                       (+-fact [:fact {:key :foo :val false}])
+                       tick!)
+             s (state agnt)]
+         (fact "The initial state has the original value and the timestep did not move"
+               (count s) => 3
+               (tabular
+                (fact "We have all the facts we expect"
+                      (s ?fact) => ?fact)
+                ?fact
+                [:halt {:kill true}]
+                [:fact {:key :foo :val true}]
+                [:agent {:name :test :timestep 3}]))))

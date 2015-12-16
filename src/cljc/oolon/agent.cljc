@@ -50,9 +50,15 @@
 
 (def system-table (t/table :agent {:name :keyword} {:timestep :long}))
 
+(def halt-table (t/table :halt {:kill :boolean}))
+
+(def internal-tables
+  {:agent system-table
+   :halt halt-table})
+
 (defn tables [sys]
   (let [{:keys [modules]} sys]
-    (into {:agent system-table} (map :state modules))))
+    (into internal-tables (map :state modules))))
 
 (defn rules [sys]
   (let [{:keys [modules]} sys]
@@ -88,6 +94,11 @@
     (let [rec (fact->record sys fact)]
       (when rec
         (update-in sys [:facts :retractions] conj rec)))))
+
+(defn +-fact [sys fact]
+  (-> sys
+      (-fact fact)
+      (+fact fact)))
 
 (defn table->facts [sys table]
   (let [{:keys [conn modules name]} sys
@@ -297,47 +308,54 @@
                 retractions (into retractions next-facts)]
             (recur next-db retractions tx)))))))
 
+(defn killed? [sys]
+  (let [[[_ attrs]] (table->facts sys halt-table)
+        kill (:kill attrs)]
+    (true? kill)))
+
 (defn tick! [sys]
   (when (started? sys)
     (clean-scratch! sys)
-    (let [{:keys [facts name conn]} sys
-          sys (assoc sys :facts empty-facts)
-          {:keys [assertions retractions]} facts
-          retract-tx (retract-tx (db/db conn) retractions)
-          {:keys [tx-data]} @(db/transact conn retract-tx)
-          tx-data (into tx-data (:tx-data @(db/transact conn (seq assertions))))]
-      (if (empty? tx-data)
-        sys
-        (let [db (db/db conn)
-              [[_ ts-attrs]] (table->facts sys system-table)
-              timestep (:timestep ts-attrs)
-              next-t (t/record system-table {:name name :timestep (inc timestep)})
-              [tx-now tx-next] (run-rules! db sys)
-              tx (into [next-t] (apply-lineage conn tx-now))
-              assertions (->> tx-next
-                              (filter map?)
-                              (filter assert?)
-                              (apply-lineage conn)
-                              (into #{}))
-              retractions (->> tx-next
-                               (filter map?)
-                               (filter retract?)
-                               (into #{}))
-              chan-out (->> tx-next
-                            (remove map?)
-                            (remove loopback?)
-                            (into #{}))
-              assertions (->> tx-next
+    (if (killed? sys)
+      sys
+      (let [{:keys [facts name conn]} sys
+            sys (assoc sys :facts empty-facts)
+            {:keys [assertions retractions]} facts
+            retract-tx (retract-tx (db/db conn) retractions)
+            {:keys [tx-data]} @(db/transact conn retract-tx)
+            tx-data (into tx-data (:tx-data @(db/transact conn (seq assertions))))]
+        (if (empty? tx-data)
+          sys
+          (let [db (db/db conn)
+                [[_ ts-attrs]] (table->facts sys system-table)
+                timestep (:timestep ts-attrs)
+                next-t (t/record system-table {:name name :timestep (inc timestep)})
+                [tx-now tx-next] (run-rules! db sys)
+                tx (into [next-t] (apply-lineage conn tx-now))
+                assertions (->> tx-next
+                                (filter map?)
+                                (filter assert?)
+                                (apply-lineage conn)
+                                (into #{}))
+                retractions (->> tx-next
+                                 (filter map?)
+                                 (filter retract?)
+                                 (into #{}))
+                chan-out (->> tx-next
                               (remove map?)
-                              (filter loopback?)
-                              (map (partial fact->record sys))
-                              (into assertions))]
-          @(db/transact conn tx)
-          (clean-channel! sys)
-          (-> sys
-              (assoc-in [:facts :assertions] assertions)
-              (assoc-in [:facts :retractions] retractions)
-              (assoc-in [:facts :out] chan-out)))))))
+                              (remove loopback?)
+                              (into #{}))
+                assertions (->> tx-next
+                                (remove map?)
+                                (filter loopback?)
+                                (map (partial fact->record sys))
+                                (into assertions))]
+            @(db/transact conn tx)
+            (clean-channel! sys)
+            (-> sys
+                (assoc-in [:facts :assertions] assertions)
+                (assoc-in [:facts :retractions] retractions)
+                (assoc-in [:facts :out] chan-out))))))))
 
 (defn fact-parents [db child]
   (let [parents (->> child
