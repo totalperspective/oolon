@@ -4,11 +4,13 @@
             [oolon.datalog :as d]
             [oolon.module :as m]
             [oolon.schema :as s]
-            [oolon.db :as db]))
+            [oolon.db :as db]
+            [oolon.utils :as u]))
 
 (def empty-facts
   {:assertions #{}
-   :retractions #{}})
+   :retractions #{}
+   :out #{}})
 
 (def init-schema
   [{:db/ident :oolon.lineage/child
@@ -52,9 +54,12 @@
 
 (def halt-table (t/table :halt {:kill :boolean}))
 
+(def clock-table (t/channel :clock {:now :instant}))
+
 (def internal-tables
   {:agent system-table
-   :halt halt-table})
+   :halt halt-table
+   :clock clock-table})
 
 (defn tables [sys]
   (let [{:keys [modules]} sys]
@@ -319,6 +324,10 @@
     (if (killed? sys)
       sys
       (let [{:keys [facts name conn]} sys
+            sys (if (every? empty? (vals facts))
+                  sys
+                  (+fact sys [:clock {:now (u/now)}]))
+            facts (:facts sys)
             sys (assoc sys :facts empty-facts)
             {:keys [assertions retractions]} facts
             retract-tx (retract-tx (db/db conn) retractions)

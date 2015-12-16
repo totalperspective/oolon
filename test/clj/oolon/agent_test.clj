@@ -103,30 +103,31 @@
 
 (facts "About a started system"
        (let [conn (ds/create-conn {})
-             sys (start! (agent :test conn [module]))]
+             agnt (start! (agent :test conn [module]))]
          (fact "The system is started"
-               (started? sys) => true)
+               (started? agnt) => true)
          (fact "Starting twice is a noop"
-               (start! sys) => sys)
+               (start! agnt) => agnt)
          (fact "The state contains only the initial timestep"
-               (state sys) => #{[:agent {:name :test :timestep 1}]})
+               (state agnt) => #{[:agent {:name :test :timestep 1}]})
          (fact "Running the system is a noop"
-               (tick! sys) => sys)))
+               (tick! agnt) => agnt)))
 
 (facts "About asserting a fact that triggers no rules"
        (let [conn (ds/create-conn {})
-             sys  (-> :test
+             agnt  (-> :test
                       (agent conn [module])
                       start!
                       (+fact [:perm {:x :a :y :b}]))]
          (fact "Before we run nothing has changed"
-               (state sys) => #{[:agent {:name :test :timestep 1}]})
-         (fact "Running the system moves to the next timestep and adds the fact"
-               (state (tick! sys)) => #{[:agent {:name :test :timestep 2}]
-                                        [:perm {:x :a :y :b}]})
-         (fact "Running again does nothing"
-               (state (tick! sys)) => #{[:agent {:name :test :timestep 2}]
-                                        [:perm {:x :a :y :b}]})))
+               (state agnt) => #{[:agent {:name :test :timestep 1}]})
+         (let [agnt (tick! agnt)]
+           (fact "Running the system moves to the next timestep and adds the fact"
+                 (state agnt) => #{[:agent {:name :test :timestep 2}]
+                                   [:perm {:x :a :y :b}]})
+           (fact "Running again does nothing"
+                 (state (tick! agnt)) => #{[:agent {:name :test :timestep 2}]
+                                           [:perm {:x :a :y :b}]}))))
 
 (facts "About asserting a facts that trigger rules"
        (let [conn (ds/create-conn {})
@@ -244,14 +245,18 @@
                   [:agent {:name :test :timestep 2}])
                  (fact "We also have the msg in the out buffer"
                        (out sys) => #{[:chan-out {:msg :foo}]})))
-         (fact "Running again does nothing but the scratch table is empty"
-               (let [s (state (tick! sys))]
-                 (count s) => 1
-                 (tabular
-                  (fact "We have all the facts we expect"
-                        (s ?fact) => ?fact)
-                  ?fact
-                  [:agent {:name :test :timestep 2}])))))
+         (let [sys (tick! sys)]
+           (fact "Running again empties the scratch table and move the timestep"
+                 (let [s (state sys)]
+                   (count s) => 1
+                   (tabular
+                    (fact "We have all the facts we expect"
+                          (s ?fact) => ?fact)
+                    ?fact
+                    [:agent {:name :test :timestep 3}])))
+           (let [sys (tick! sys)]
+             (fact "Nothing happens"
+                   (state sys) => #{[:agent {:name :test :timestep 3}]})))))
 
 (facts "About loopback channels"
        (let [conn (ds/create-conn {})
@@ -604,3 +609,35 @@
                 [:halt {:kill true}]
                 [:fact {:key :foo :val true}]
                 [:agent {:name :test :timestep 3}]))))
+
+(def clock-module
+  (m/module
+   :clock
+   [:state
+    (t/input :tick {:id :keyword})
+    (t/channel :time {:id :keyword} {:time :instant})
+    :rules
+    (d/rule> [:time {:id :?id :time :?t}]
+             [[:tick {:id :?id}]
+              [:clock {:now :?t}]])]))
+
+(facts "About the cock"
+       (let [conn (ds/create-conn {})
+             agnt  (-> :test
+                       (agent conn [clock-module])
+                       start!
+                       (+fact [:tick {:id :foo}])
+                       tick!)
+             s (state agnt)
+             time (first (out agnt))]
+         (fact "We see the input tick and the timestep move"
+               (count s) => 2
+               (tabular
+                (fact "We have all the facts we expect"
+                      (s ?fact) => ?fact)
+                ?fact
+                [:tick {:id :foo}]
+                [:agent {:name :test :timestep 2}]))
+         (fact "we have the time"
+               time => (just [:time (contains {:id :foo :time anything})])
+               (class (:time (second time))) => java.util.Date)))
