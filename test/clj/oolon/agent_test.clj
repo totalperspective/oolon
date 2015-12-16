@@ -548,3 +548,31 @@
                   [:link {:src 2 :dst 5}]
                   [:path {:src 2 :dst 5}]
                   [:link {:src 5 :dst 4}])))))
+
+(def upsert-module
+  (m/module
+   :upsert
+   [:state
+    (t/table :test {:key :keyword} {:val :long})
+    (t/input :upsert {:key :keyword :val :long})
+    :rules
+    (d/rule+- [:test {:key :?key :val :?val}]
+              [[:upsert {:key :?key :val :?val}]])]))
+
+(facts "About upserts"
+       (let [conn (ds/create-conn {})
+             agnt  (-> :test
+                       (agent conn [upsert-module])
+                       start!
+                       (+fact [:test {:key :foo :val 1}])
+                       tick!)]
+         (fact "The initial state has the original value"
+               (state agnt) => (contains #{[:test {:key :foo :val 1}]}))
+         (let [agnt (-> agnt
+                        (+fact [:upsert {:key :foo :val 2}])
+                        tick!
+                        tick!)]
+           (fact "The after upserting we get a new value"
+                 (state agnt) => (contains #{[:test {:key :foo :val 2}]}))
+           (fact "The after upserting no longet have our old value"
+                 (state agnt) =not=> (contains #{[:test {:key :foo :val 1}]})))))
