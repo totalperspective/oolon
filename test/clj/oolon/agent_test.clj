@@ -641,3 +641,19 @@
          (fact "we have the time"
                time => (just [:time (contains {:id :foo :time anything})])
                (class (:time (second time))) => java.util.Date)))
+
+#_(def vote-module
+  (m/module
+   :vote
+   [:state
+    (t/table :vote {:id :keyword :voter :keyword})
+    (t/table :vcount {:id :keyword} {:count :long})
+    (t/channel :winner {:id :keyword})
+    :rules
+    (d/rule [:vcount {:id :?id :count '(count ?id)}]
+            [[:vote {:id :?id}]]
+            [:?id])
+    (d/rule> [:winner {:id :?id}]
+             [[:vcount {:id :?id :count :?c}]]
+             []
+             '(max ?c))]))
