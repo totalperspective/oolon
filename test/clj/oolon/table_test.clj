@@ -37,7 +37,7 @@
                          {:src :keyword :dst :keyword}
                          {:cost :long})
              row {:src :foo :dst :bar :cost 1}
-             key {:src :foo :dst :bar}
+             key {:link/src :foo :link/dst :bar}
              id (hash key)]
          (fact "We can generate a record from a row"
                (record link row)

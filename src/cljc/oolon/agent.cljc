@@ -125,6 +125,7 @@
   (let [{:keys [head-form head body dep-lvars]} rule
         table (get tables (first head-form))
         defer (:deferred rule)
+        mta (select-keys rule [:assert :retract])
         channel? (:channel table)
         lvars (into dep-lvars (d/lvars head))
         q {:find lvars :where body}]
@@ -146,7 +147,7 @@
                                (with-meta rel {:lineage #{lineage}})))
                            (with-meta
                              (t/add-id table (d/bind-form head fact))
-                             {:lineage #{lineage}}))))))]))
+                             (assoc mta :lineage #{lineage})))))))]))
 
 (defn depends? [rules rule]
   (some (partial d/depends-on? rule) rules))
@@ -226,6 +227,14 @@
 (defn loopback? [rel]
   (let [m (meta rel)]
     (:loopback m)))
+
+(defn assert? [rel]
+  (let [m (meta rel)]
+    (:assert m)))
+
+(defn retract? [rel]
+  (let [m (meta rel)]
+    (:retract m)))
 
 (defn apply-lineage [conn tx]
   (let [tx (map (fn [e]
@@ -307,8 +316,13 @@
               tx (into [next-t] (apply-lineage conn tx-now))
               assertions (->> tx-next
                               (filter map?)
+                              (filter assert?)
                               (apply-lineage conn)
                               (into #{}))
+              retractions (->> tx-next
+                               (filter map?)
+                               (filter retract?)
+                               (into #{}))
               chan-out (->> tx-next
                             (remove map?)
                             (remove loopback?)
@@ -322,6 +336,7 @@
           (clean-channel! sys)
           (-> sys
               (assoc-in [:facts :assertions] assertions)
+              (assoc-in [:facts :retractions] retractions)
               (assoc-in [:facts :out] chan-out)))))))
 
 (defn fact-parents [db child]

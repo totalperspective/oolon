@@ -167,6 +167,7 @@
 (defn rule- [head-form body]
   (-> (rule head-form body)
       (dissoc :assert)
+      (assoc :monotone false)
       (assoc :retract true)
       (assoc :deferred true)))
 
