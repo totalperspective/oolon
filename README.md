@@ -241,6 +241,26 @@ the resulting facts are added
 to the target table
 at the start of the next timestep.
 
+**Deferred Delete**
+`(rule- ...)` 
+When these rules fire
+the resulting facts are removed
+from the target table
+at the start of the next timestep.
+Additionally,
+any facts derived from these facts
+are also removed.
+
+**Deferred Update (Upsert)**
+`(rule+- ...)` 
+Performs an update of a fact,
+equivalent to:
+
+```clojure
+(rule- ...)
+(rule+ ...)
+```
+
 **Asynchonous**
 `(rule> ...)`  
 When these rules fire
