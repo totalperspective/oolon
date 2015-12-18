@@ -36,7 +36,14 @@
 (defrecord Db [db last-tx]
   db/Db
   (-query [_ {:keys [query args]}]
-    (apply q/q query db args))
+    (let [agg? (when (map? query)
+                 (->> query
+                      :find
+                      (filter list?)
+                      first))]
+      (if agg?
+        (apply d/q query db args)
+        (apply q/q query db args))))
   (-pull [_ pattern eid]
     (d/pull db pattern eid))
   (-with [_ tx-data]

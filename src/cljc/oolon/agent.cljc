@@ -137,14 +137,43 @@
                      distinct)]
     lineage))
 
+(defn apply-agg [agg head groups]
+  (if (empty? agg)
+    groups
+    (let [m (->> agg
+                 (d/bind-form head)
+                 (filter (comp list? val))
+                 (into {}))]
+      (prn m)
+      groups)))
+
 (defn run-rule [db tables id-map rule]
-  (let [{:keys [head-form head body dep-lvars]} rule
+  (let [{:keys [head-form head body dep-lvars group aggregate]} rule
         table (get tables (first head-form))
         defer (:deferred rule)
         mta (select-keys rule [:assert :retract])
         channel? (:channel table)
+        dep-lvar? (into #{} dep-lvars)
         lvars (into dep-lvars (d/lvars head))
-        q {:find lvars :where body}]
+        grouped? (not (empty? group))
+        qvars (mapv (fn [lvar]
+                      (cond
+                        (aggregate lvar) (aggregate lvar)
+                        (and grouped? (dep-lvar? lvar)) (list 'aggregate '?$dep lvar)
+                        :else lvar))
+                    lvars)
+        qvar? (into #{} qvars)
+        with (vec (remove qvar? group))
+        in (if grouped?
+             '[$ ?$dep]
+             '[$])
+        args (if grouped?
+               [vec]
+               [])
+        q (if (empty? with)
+            {:find qvars :in in :where body}
+            {:find qvars :in in :with group :where body})]
+    (prn (apply db/q db q args))
     [defer (->> q
                 (db/q db)
                 (map (partial zipmap lvars))
@@ -163,7 +192,10 @@
                                (with-meta rel {:lineage #{lineage}})))
                            (with-meta
                              (t/add-id table (d/bind-form head fact))
-                             (assoc mta :lineage #{lineage})))))))]))
+                             (assoc mta :lineage #{lineage}))))))
+                (group-by (fn [fact]))
+                (apply-agg aggregate head)
+                (mapcat val))]))
 
 (defn depends? [rules rule]
   (some (partial d/depends-on? rule) rules))
@@ -183,7 +215,7 @@
   ([db sys]
    (let [rules (rules sys)
          strata (stratify rules)]
-     (run-rules! db sys #{} #{} 999 strata {})))
+     (run-rules! db sys #{} #{} 99 strata {})))
   ([db sys tx-acc deferred max strata id-map]
    (when (pos? max)
      (if (empty? strata)
@@ -218,6 +250,7 @@
                                  (when (= "$id" (name a))
                                    [e v])))
                          (into id-map))]
+         (prn tx-data)
          (if (empty? tx-data)
            (recur db sys tx-acc deferred (dec max) (rest strata) id-map)
            (recur db sys tx-acc deferred (dec max) strata id-map)))))))

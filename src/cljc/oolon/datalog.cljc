@@ -138,47 +138,51 @@
        distinct
        (into [])))
 
-(defn rule [head-form body]
-  (let [head (rel->map head-form)
-        body (query* body)
-        safe? (safe? head body)
-        body-neg (negative body)
-        body-pos (positive body)
-        neg? (not (empty? body-neg))
-        neg-attrs (form-atrs body-neg)
-        pos-attrs (form-atrs [body-pos])
-        dep-lvars (dep-lvars [body-pos])
-        head-attrs (apply hash-set (keys head))]
-    (-> default-rule
-        (assoc :head-form (expand-form head-form))
-        (assoc :head head)
-        (assoc :body body)
-        (assoc :safe? safe?)
-        (assoc :neg? neg?)
-        (assoc :neg-attrs neg-attrs)
-        (assoc :pos-attrs pos-attrs)
-        (assoc :head-attrs head-attrs)
-        (assoc :dep-lvars dep-lvars))))
+(defn rule
+  ([head-form body]
+   (rule head-form body [] {}))
+  ([head-form body group agg]
+   (let [head (rel->map head-form)
+         body (query* body)
+         safe? (safe? head body)
+         body-neg (negative body)
+         body-pos (positive body)
+         neg? (not (empty? body-neg))
+         neg-attrs (form-atrs body-neg)
+         pos-attrs (form-atrs [body-pos])
+         dep-lvars (dep-lvars [body-pos])
+         head-attrs (apply hash-set (keys head))]
+     (-> default-rule
+         (assoc :head-form (expand-form head-form))
+         (assoc :head head)
+         (assoc :group (expand-form group))
+         (assoc :aggregate (expand-form agg))
+         (assoc :body body)
+         (assoc :safe? safe?)
+         (assoc :neg? neg?)
+         (assoc :neg-attrs neg-attrs)
+         (assoc :pos-attrs pos-attrs)
+         (assoc :head-attrs head-attrs)
+         (assoc :dep-lvars dep-lvars)))))
 
-(defn rule+ [head-form body]
-  (-> (rule head-form body)
+(defn rule+ [head-form body & xs]
+  (-> (apply rule head-form body xs)
       (assoc :deferred true)))
 
-(defn rule- [head-form body]
-  (-> (rule head-form body)
+(defn rule- [head-form body & xs]
+  (-> (apply rule head-form body xs)
       (dissoc :assert)
       (assoc :monotone false)
       (assoc :retract true)
       (assoc :deferred true)))
 
-(defn rule+- [head-form body]
-  (-> (rule head-form body)
+(defn rule+- [head-form body & xs]
+  (-> (apply rule+ head-form body xs)
       (assoc :monotone false)
-      (assoc :retract true)
-      (assoc :deferred true)))
+      (assoc :retract true)))
 
-(defn rule> [head-form body]
-  (-> (rule+ head-form body)
+(defn rule> [head-form body & xs]
+  (-> (apply rule+ head-form body xs)
       (assoc :async true)
       (assoc :monotone false)))
 

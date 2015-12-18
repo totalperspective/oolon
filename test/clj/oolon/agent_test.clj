@@ -642,18 +642,40 @@
                time => (just [:time (contains {:id :foo :time anything})])
                (class (:time (second time))) => java.util.Date)))
 
-#_(def vote-module
+(def vote-module
   (m/module
    :vote
    [:state
-    (t/table :vote {:id :keyword :voter :keyword})
-    (t/table :vcount {:id :keyword} {:count :long})
-    (t/channel :winner {:id :keyword})
+    (t/table :vote {:master :keyword :peer :keyword :ident :keyword} {:response :keyword})
+    (t/scratch :vote-cnt {:ident :keyword :response :keyword :count :long})
     :rules
-    (d/rule [:vcount {:id :?id :count '(count ?id)}]
-            [[:vote {:id :?id}]]
-            [:?id])
-    (d/rule> [:winner {:id :?id}]
-             [[:vcount {:id :?id :count :?c}]]
-             []
-             '(max ?c))]))
+    (d/rule [:vote-cnt {:ident :?id :response :?r :count :?c}]
+            [[:vote {:ident :?id :response :?r :peer :?p}]]
+            [:?id :?r] {:?c '(count :?id)})]))
+
+(defn vote [master peer ident response]
+  [:vote {:master master :peer peer :ident ident :response response}])
+
+(def vote-data
+  [(vote :a :b :foo :yes)
+   (vote :a :a :foo :yes)
+   (vote :a :c :foo :no)])
+
+(facts "About votes"
+       (let [conn (ds/create-conn {})
+             agnt  (-> :test
+                       (agent conn [vote-module])
+                       start!
+                       (add-data vote-data)
+                       tick!)
+             s (state agnt)]
+         (prn s)
+         (fact "We get our vote results"
+               (count s) => 6
+               (tabular
+                (fact "We have all the facts we expect"
+                      (s ?fact) => ?fact)
+                ?fact
+                [:vote-cnt {:ident :foo :response :yes :count 2}]
+                [:vote-cnt {:ident :foo :response :no :count 1}]
+                [:agent {:name :test :timestep 2}]))))
