@@ -67,7 +67,7 @@ lein install
 #### Leiningen
 
 ```clojure
-:require [[totalperspective/oolon "0.3.0"]
+:require [[totalperspective/oolon "0.4.0"]
           [datascript "0.13.3"]]
 ```
 

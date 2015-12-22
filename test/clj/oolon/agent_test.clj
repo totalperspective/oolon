@@ -641,3 +641,98 @@
          (fact "we have the time"
                time => (just [:time (contains {:id :foo :time anything})])
                (class (:time (second time))) => java.util.Date)))
+
+(def vote-module
+  (m/module
+   :vote
+   [:state
+    (t/table :vote {:master :keyword :peer :keyword :ident :keyword} {:response :keyword})
+    (t/scratch :vote-cnt {:ident :keyword :response :keyword :count :long})
+    :rules
+    (d/rule [:vote-cnt {:ident :?id :response :?r :count :?c}]
+            [[:vote {:ident :?id :response :?r :peer :?p}]]
+            [:?id :?r] {:?c '(count :?id)})]))
+
+(defn vote [master peer ident response]
+  [:vote {:master master :peer peer :ident ident :response response}])
+
+(def vote-data
+  [(vote :a :b :foo :yes)
+   (vote :a :a :foo :yes)
+   (vote :a :c :foo :no)])
+
+(facts "About votes"
+       (let [conn (ds/create-conn {})
+             agnt  (-> :test
+                       (agent conn [vote-module])
+                       start!
+                       (add-data vote-data)
+                       tick!)
+             s (state agnt)]
+         (fact "We get our vote results"
+               (count s) => 6
+               (tabular
+                (fact "We have all the facts we expect"
+                      (s ?fact) => ?fact)
+                ?fact
+                [:vote-cnt {:ident :foo :response :yes :count 2}]
+                [:vote-cnt {:ident :foo :response :no :count 1}]
+                [:agent {:name :test :timestep 2}]))))
+
+(def tied-paths-module
+  (m/module
+   :tied-paths
+   [:state
+    (t/table :link {:from :keyword :to :keyword :cost :long})
+    (t/table :path {:from :keyword :to :keyword :nxt :keyword :cost :long})
+    (t/table :shortest {:from :keyword :to :keyword} {:nxt :keyword :cost :long})
+    :rules
+    (d/rule [:path {:from :?f :to :?t :nxt :?n :cost :?c}]
+            [[:link {:from :?f :to :?t :cost :?c}]
+             [:link {:from :?n}]])
+    (d/rule [:path {:from :?f :to :?t :nxt :?n :cost :?c}]
+            [[:link {:from :?f :to :?n :cost :?cl}]
+             [:path {:from :?n :to :?t :cost :?cp}]
+             '[(+ ?cl ?cp) ?c]])
+    (d/rule [:shortest {:from :?f :to :?t :nxt :?n :cost :?c}]
+            [[:path {:from :?f :to :?t :nxt :?n :cost :?c}]]
+            [:?f :?t] (d/argmin :cost))]))
+
+(def tied-paths-data
+  [[:link {:from :a :to :b :cost 1}]
+   [:link {:from :a :to :b :cost 4}]
+   [:link {:from :b :to :c :cost 1}]
+   [:link {:from :c :to :d :cost 1}]
+   [:link {:from :d :to :e :cost 1}]])
+
+(facts "About paths"
+       (let [conn (ds/create-conn {})
+             agnt  (-> :test
+                       (agent conn [tied-paths-module])
+                       start!
+                       (add-data tied-paths-data)
+                       tick!)
+             s (state agnt)
+             shortest (->> s
+                           (filter #(= :shortest (first %)))
+                           (into #{}))]
+         (fact "We get our vote results"
+               (count shortest) => 10
+               (tabular
+                (fact "We have all the facts we expect"
+                      (shortest ?fact) => ?fact)
+                ?fact
+                ;; 1st Order
+                [:shortest {:from :a, :to :b, :nxt :a, :cost 1}]
+                [:shortest {:from :b, :to :c, :nxt :b, :cost 1}]
+                [:shortest {:from :c, :to :d, :nxt :c, :cost 1}]
+                [:shortest {:from :d, :to :e, :nxt :d, :cost 1}]
+                ;; 2nd order
+                [:shortest {:from :a, :to :c, :nxt :b, :cost 2}]
+                [:shortest {:from :b, :to :d, :nxt :c, :cost 2}]
+                [:shortest {:from :c, :to :e, :nxt :d, :cost 2}]
+                ;; 3rd Order
+                [:shortest {:from :a, :to :d, :nxt :b, :cost 3}]
+                [:shortest {:from :b, :to :e, :nxt :c, :cost 3}]
+                ;; 4th Order
+                [:shortest {:from :a, :to :e, :nxt :b, :cost 4}]))))

@@ -131,22 +131,60 @@
 (defn lineage [dep-lvars fact]
   (let [dep-lvar? (apply hash-set dep-lvars)
         lineage (->> fact
-                     (keep (fn [[k v]]
-                             (when (dep-lvar? k)
-                               v)))
+                     (mapcat (fn [[k v]]
+                               (when (dep-lvar? k)
+                                 (if (coll? v)
+                                   (seq v)
+                                   [v]))))
                      distinct)]
     lineage))
 
+(defn apply-agg [agg table groups]
+  (if (fn? agg)
+    (into {} (map (fn [[k fs]]
+                    (let [fs (reduce (fn [coll nxt]
+                                       (if (empty? coll)
+                                         #{nxt}
+                                         (let [state (first coll)
+                                               op (agg table state nxt)]
+                                           (condp = op
+                                             :keep (conj coll nxt)
+                                             :ignore coll
+                                             :replace #{nxt}
+                                             :else coll))))
+                                     #{}
+                                     fs)]
+                      [k fs]))
+                  groups))
+    groups))
+
 (defn run-rule [db tables id-map rule]
-  (let [{:keys [head-form head body dep-lvars]} rule
+  (let [{:keys [head-form head body dep-lvars group aggregate]} rule
         table (get tables (first head-form))
         defer (:deferred rule)
         mta (select-keys rule [:assert :retract])
         channel? (:channel table)
+        dep-lvar? (into #{} dep-lvars)
         lvars (into dep-lvars (d/lvars head))
-        q {:find lvars :where body}]
-    [defer (->> q
-                (db/q db)
+        grouped? (not (empty? group))
+        qvars (mapv (fn [lvar]
+                      (cond
+                        (and (map? aggregate) (aggregate lvar)) (aggregate lvar)
+                        (and grouped? (dep-lvar? lvar)) (list 'aggregate '?$dep lvar)
+                        :else lvar))
+                    lvars)
+        qvar? (into #{} qvars)
+        with (vec (remove qvar? group))
+        in (if grouped?
+             '[$ ?$dep]
+             '[$])
+        args (if grouped?
+               [(partial apply hash-set)]
+               [])
+        q (if (empty? with)
+            {:find qvars :in in :where body}
+            {:find qvars :in in :with group :where body})]
+    [defer (->> (apply db/q db q args)
                 (map (partial zipmap lvars))
                 distinct
                 (map (fn [fact]
@@ -163,7 +201,17 @@
                                (with-meta rel {:lineage #{lineage}})))
                            (with-meta
                              (t/add-id table (d/bind-form head fact))
-                             (assoc mta :lineage #{lineage})))))))]))
+                             (assoc mta :lineage #{lineage}))))))
+                (group-by (fn [fact]
+                            (when (fn? aggregate)
+                              (->> (repeat true)
+                                   (zipmap group)
+                                   (d/bind-form head)
+                                   (filter #(true? (val %)))
+                                   (map key)
+                                   (select-keys fact)))))
+                (apply-agg aggregate table)
+                (mapcat val))]))
 
 (defn depends? [rules rule]
   (some (partial d/depends-on? rule) rules))
@@ -183,7 +231,7 @@
   ([db sys]
    (let [rules (rules sys)
          strata (stratify rules)]
-     (run-rules! db sys #{} #{} 999 strata {})))
+     (run-rules! db sys #{} #{} 99 strata {})))
   ([db sys tx-acc deferred max strata id-map]
    (when (pos? max)
      (if (empty? strata)
