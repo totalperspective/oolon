@@ -696,13 +696,7 @@
              '[(+ ?cl ?cp) ?c]])
     (d/rule [:shortest {:from :?f :to :?t :nxt :?n :cost :?c}]
             [[:path {:from :?f :to :?t :nxt :?n :cost :?c}]]
-            [:?f :?t] (fn [a b]
-                        (let [ac (:shortest/cost a)
-                              bc (:shortest/cost b)]
-                          (cond
-                            (< (compare ac bc) 0) :ignore
-                            (= ac bc) :keep
-                            :else :replace))))]))
+            [:?f :?t] (d/argmin :cost))]))
 
 (def tied-paths-data
   [[:link {:from :a :to :b :cost 1}]

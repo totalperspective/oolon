@@ -1,5 +1,6 @@
 (ns oolon.datalog
-  (:require [clojure.core.match :refer [match]]))
+  (:require [clojure.core.match :refer [match]]
+            [oolon.table :as t]))
 
 (defn val->sym [val]
   (cond
@@ -191,3 +192,24 @@
         dependancy-attrs (:head-attrs dependancy)
         intersection (clojure.set/intersection dependant-attrs dependancy-attrs)]
     (not (empty? intersection))))
+
+(defn argagg [arg cmp]
+  (fn [t a b]
+    (let [attr (t/fattr->eattr t arg)
+          av (attr a)
+          bv (attr b)]
+      (cmp av bv))))
+
+(defn argmin [arg]
+  (argagg arg (fn [a b]
+                (cond
+                  (< (compare a b) 0) :ignore
+                  (= a b) :keep
+                  :else :replace))))
+
+(defn argmax [arg]
+  (argagg arg (fn [a b]
+                (cond
+                  (> (compare a b) 0) :ignore
+                  (= a b) :keep
+                  :else :replace))))

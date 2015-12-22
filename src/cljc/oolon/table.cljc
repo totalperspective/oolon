@@ -56,8 +56,8 @@
     hash-val))
 
 (defn fattr->eattr [table fattr]
-  (keyword (:name table)
-           fattr))
+  (keyword (name (:name table))
+           (name fattr)))
 
 (defn rel [table]
   (let [{:keys [keys vals]} table

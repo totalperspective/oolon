@@ -139,14 +139,14 @@
                      distinct)]
     lineage))
 
-(defn apply-agg [agg head groups]
+(defn apply-agg [agg table groups]
   (if (fn? agg)
     (into {} (map (fn [[k fs]]
                     (let [fs (reduce (fn [coll nxt]
                                        (if (empty? coll)
                                          #{nxt}
                                          (let [state (first coll)
-                                               op (agg state nxt)]
+                                               op (agg table state nxt)]
                                            (condp = op
                                              :keep (conj coll nxt)
                                              :ignore coll
@@ -210,7 +210,7 @@
                                    (filter #(true? (val %)))
                                    (map key)
                                    (select-keys fact)))))
-                (apply-agg aggregate head)
+                (apply-agg aggregate table)
                 (mapcat val))]))
 
 (defn depends? [rules rule]
