@@ -1,4 +1,4 @@
-(defproject totalperspective/oolon "0.3.0"
+(defproject totalperspective/oolon "0.4.0"
   :description "Bloom implementation for Clojure/ClojureScript leaning on Datomic datalog"
   :url "https://github.com/totalperspective/oolon"
   :license {:name "Eclipse Public License"
