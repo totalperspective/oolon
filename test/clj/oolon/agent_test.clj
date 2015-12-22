@@ -669,7 +669,6 @@
                        (add-data vote-data)
                        tick!)
              s (state agnt)]
-         (prn s)
          (fact "We get our vote results"
                (count s) => 6
                (tabular

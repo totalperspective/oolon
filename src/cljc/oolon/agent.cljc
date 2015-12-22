@@ -131,9 +131,11 @@
 (defn lineage [dep-lvars fact]
   (let [dep-lvar? (apply hash-set dep-lvars)
         lineage (->> fact
-                     (keep (fn [[k v]]
-                             (when (dep-lvar? k)
-                               v)))
+                     (mapcat (fn [[k v]]
+                               (when (dep-lvar? k)
+                                 (if (coll? v)
+                                   (seq v)
+                                   [v]))))
                      distinct)]
     lineage))
 
@@ -144,7 +146,6 @@
                  (d/bind-form head)
                  (filter (comp list? val))
                  (into {}))]
-      (prn m)
       groups)))
 
 (defn run-rule [db tables id-map rule]
@@ -168,14 +169,12 @@
              '[$ ?$dep]
              '[$])
         args (if grouped?
-               [vec]
+               [(partial apply hash-set)]
                [])
         q (if (empty? with)
             {:find qvars :in in :where body}
             {:find qvars :in in :with group :where body})]
-    (prn (apply db/q db q args))
-    [defer (->> q
-                (db/q db)
+    [defer (->> (apply db/q db q args)
                 (map (partial zipmap lvars))
                 distinct
                 (map (fn [fact]
@@ -250,7 +249,6 @@
                                  (when (= "$id" (name a))
                                    [e v])))
                          (into id-map))]
-         (prn tx-data)
          (if (empty? tx-data)
            (recur db sys tx-acc deferred (dec max) (rest strata) id-map)
            (recur db sys tx-acc deferred (dec max) strata id-map)))))))
