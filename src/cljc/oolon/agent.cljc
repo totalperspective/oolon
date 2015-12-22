@@ -140,13 +140,23 @@
     lineage))
 
 (defn apply-agg [agg head groups]
-  (if (empty? agg)
-    groups
-    (let [m (->> agg
-                 (d/bind-form head)
-                 (filter (comp list? val))
-                 (into {}))]
-      groups)))
+  (if (fn? agg)
+    (into {} (map (fn [[k fs]]
+                    (let [fs (reduce (fn [coll nxt]
+                                       (if (empty? coll)
+                                         #{nxt}
+                                         (let [state (first coll)
+                                               op (agg state nxt)]
+                                           (condp = op
+                                             :keep (conj coll nxt)
+                                             :ignore coll
+                                             :replace #{nxt}
+                                             :else coll))))
+                                     #{}
+                                     fs)]
+                      [k fs]))
+                  groups))
+    groups))
 
 (defn run-rule [db tables id-map rule]
   (let [{:keys [head-form head body dep-lvars group aggregate]} rule
@@ -159,7 +169,7 @@
         grouped? (not (empty? group))
         qvars (mapv (fn [lvar]
                       (cond
-                        (aggregate lvar) (aggregate lvar)
+                        (and (map? aggregate) (aggregate lvar)) (aggregate lvar)
                         (and grouped? (dep-lvar? lvar)) (list 'aggregate '?$dep lvar)
                         :else lvar))
                     lvars)
@@ -192,7 +202,14 @@
                            (with-meta
                              (t/add-id table (d/bind-form head fact))
                              (assoc mta :lineage #{lineage}))))))
-                (group-by (fn [fact]))
+                (group-by (fn [fact]
+                            (when (fn? aggregate)
+                              (->> (repeat true)
+                                   (zipmap group)
+                                   (d/bind-form head)
+                                   (filter #(true? (val %)))
+                                   (map key)
+                                   (select-keys fact)))))
                 (apply-agg aggregate head)
                 (mapcat val))]))
 

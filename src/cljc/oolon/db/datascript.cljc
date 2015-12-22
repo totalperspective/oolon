@@ -40,8 +40,14 @@
                  (->> query
                       :find
                       (filter list?)
-                      first))]
-      (if agg?
+                      first))
+          fn? (when (map? query)
+                (->> query
+                     :where
+                     (map first)
+                     (filter list?)
+                     first))]
+      (if (or agg? fn?)
         (apply d/q query db args)
         (apply q/q query db args))))
   (-pull [_ pattern eid]

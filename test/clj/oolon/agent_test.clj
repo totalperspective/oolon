@@ -678,3 +678,67 @@
                 [:vote-cnt {:ident :foo :response :yes :count 2}]
                 [:vote-cnt {:ident :foo :response :no :count 1}]
                 [:agent {:name :test :timestep 2}]))))
+
+(def tied-paths-module
+  (m/module
+   :tied-paths
+   [:state
+    (t/table :link {:from :keyword :to :keyword :cost :long})
+    (t/table :path {:from :keyword :to :keyword :nxt :keyword :cost :long})
+    (t/table :shortest {:from :keyword :to :keyword} {:nxt :keyword :cost :long})
+    :rules
+    (d/rule [:path {:from :?f :to :?t :nxt :?n :cost :?c}]
+            [[:link {:from :?f :to :?t :cost :?c}]
+             [:link {:from :?n}]])
+    (d/rule [:path {:from :?f :to :?t :nxt :?n :cost :?c}]
+            [[:link {:from :?f :to :?n :cost :?cl}]
+             [:path {:from :?n :to :?t :cost :?cp}]
+             '[(+ ?cl ?cp) ?c]])
+    (d/rule [:shortest {:from :?f :to :?t :nxt :?n :cost :?c}]
+            [[:path {:from :?f :to :?t :nxt :?n :cost :?c}]]
+            [:?f :?t] (fn [a b]
+                        (let [ac (:shortest/cost a)
+                              bc (:shortest/cost b)]
+                          (cond
+                            (< (compare ac bc) 0) :ignore
+                            (= ac bc) :keep
+                            :else :replace))))]))
+
+(def tied-paths-data
+  [[:link {:from :a :to :b :cost 1}]
+   [:link {:from :a :to :b :cost 4}]
+   [:link {:from :b :to :c :cost 1}]
+   [:link {:from :c :to :d :cost 1}]
+   [:link {:from :d :to :e :cost 1}]])
+
+(facts "About paths"
+       (let [conn (ds/create-conn {})
+             agnt  (-> :test
+                       (agent conn [tied-paths-module])
+                       start!
+                       (add-data tied-paths-data)
+                       tick!)
+             s (state agnt)
+             shortest (->> s
+                           (filter #(= :shortest (first %)))
+                           (into #{}))]
+         (fact "We get our vote results"
+               (count shortest) => 10
+               (tabular
+                (fact "We have all the facts we expect"
+                      (shortest ?fact) => ?fact)
+                ?fact
+                ;; 1st Order
+                [:shortest {:from :a, :to :b, :nxt :a, :cost 1}]
+                [:shortest {:from :b, :to :c, :nxt :b, :cost 1}]
+                [:shortest {:from :c, :to :d, :nxt :c, :cost 1}]
+                [:shortest {:from :d, :to :e, :nxt :d, :cost 1}]
+                ;; 2nd order
+                [:shortest {:from :a, :to :c, :nxt :b, :cost 2}]
+                [:shortest {:from :b, :to :d, :nxt :c, :cost 2}]
+                [:shortest {:from :c, :to :e, :nxt :d, :cost 2}]
+                ;; 3rd Order
+                [:shortest {:from :a, :to :d, :nxt :b, :cost 3}]
+                [:shortest {:from :b, :to :e, :nxt :c, :cost 3}]
+                ;; 4th Order
+                [:shortest {:from :a, :to :e, :nxt :b, :cost 4}]))))
