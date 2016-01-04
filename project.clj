@@ -15,5 +15,4 @@
                              [lein-midje "3.1.3"]
                              [lein-ancient "0.5.5"]
                              [lein-set-version "0.4.1"]]
-                   :set-version
-                   {:updates [{:path "README.md" :no-snapshot true}]}}})
+                   :set-version {:updates [{:path "README.md" :no-snapshot true}]}}})

@@ -1,6 +1,8 @@
 (ns oolon.datalog
-  (:require [clojure.core.match :refer [match]]
-            [oolon.table :as t]))
+  (:require #? (:clj [clojure.core.match :refer [match]]
+                     :cljs [cljs.core.match :refer-macros [match]])
+            [oolon.table :as t]
+            [clojure.walk :as walk]))
 
 (defn val->sym [val]
   (cond
@@ -53,7 +55,7 @@
 
 (defn flatten-all [form]
   (->> form
-       (clojure.walk/prewalk #(if (coll? %)
+       (walk/prewalk #(if (coll? %)
                                 (seq %)
                                 %))
        flatten))
@@ -65,7 +67,7 @@
        (into #{})))
 
 (defn bind-form [form smap]
-  (clojure.walk/prewalk-replace smap form))
+  (walk/prewalk-replace smap form))
 
 (defn negation? [term]
   (match [term]
@@ -98,7 +100,7 @@
     (every? empty? [lhs-diff neg-diff])))
 
 (defn expand-form [form]
-  (clojure.walk/prewalk val->sym form))
+  (walk/prewalk val->sym form))
 
 (defn rel->map [rel]
   (if (sequential? rel)
